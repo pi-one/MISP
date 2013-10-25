@@ -65,12 +65,15 @@ class LogsController extends AppController {
 		$mineOrAdmin = false;
 		$this->loadModel('Event');
 		$this->Event->recursive = -1;
-		$this->Event->read(null, $id);
+		if (!$this->Event->read(null, $id)) {
+			$this->Session->setFlash(__('You don\'t have access to view this event or it doesn\'t exist.'));
+			$this->redirect(array('controller' => 'events', 'action' => 'index', 'admin' => false));
+		}
 		// send unauthorised people away. Only site admins and users of the same org may see events that are "your org only". Everyone else can proceed for all other levels of distribution
 		if (!$this->_isSiteAdmin()) {
 			if ($this->Event->data['Event']['distribution'] == 0) {
 				if ($this->Event->data['Event']['org'] != $this->Auth->user('org')) {
-					$this->Session->setFlash(__('You don\'t have access to view this event.'));
+					$this->Session->setFlash(__('You don\'t have access to view this event or it doesn\'t exist.'));
 					$this->redirect(array('controller' => 'events', 'action' => 'index', 'admin' => false));
 				} else {
 					$mineOrAdmin = true;
