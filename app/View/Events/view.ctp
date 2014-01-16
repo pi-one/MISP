@@ -133,16 +133,21 @@ $mayPublish = ($isAclPublish && $event['Event']['orgc'] == $me['org']);
 		<?php
 if (!empty($event['Attribute'])):?>
 		<table class="table table-striped table-condensed">
-		<tr>
-			<th>Category</th>
-			<th>Type</th>
-			<th>Value</th>
-			<th>Comment</th>
-			<th>Related Events</th>
-			<th title="<?php echo $attrDescriptions['signature']['desc'];?>">IDS</th>
-			<th title="<?php echo $attrDescriptions['distribution']['desc'];?>">Distribution</th>
-			<th class="actions">Actions</th>
-		</tr><?php
+            <thead>
+        		<tr>
+                    <th><input value="1" name="selectall" type="checkbox" class="checkall"></th>
+        			<th>Category</th>
+        			<th>Type</th>
+        			<th>Value</th>
+        			<th>Comment</th>
+        			<th>Related Events</th>
+        			<th title="<?php echo $attrDescriptions['signature']['desc'];?>">IDS</th>
+        			<th title="<?php echo $attrDescriptions['distribution']['desc'];?>">Distribution</th>
+        			<th class="actions">Actions</th>
+        		</tr>
+            </thead>
+            <tbody>
+        <?php
 	foreach ($categories as $category):
 		$first = 1;
 		foreach ($event['Attribute'] as $attribute):
@@ -150,7 +155,8 @@ if (!empty($event['Attribute'])):?>
 			if ($attribute['category'] != $category) continue;
 			if (count($attribute['ShadowAttribute'])) $extra .= 'highlight1';
 		?>
-		<tr>
+		<tr id="<?php echo $attribute['id']; ?>">
+            <td><input type="checkbox" name="attr_id_check" value="<?php echo $attribute['id']; ?>"></td>
 			<?php if($first): ?>
 			<td class= "short <?php echo $extra; ?>" title="<?php if('' != $attribute['category']) echo $categoryDefinitions[$attribute['category']]['desc'];?>">
 				<?php
@@ -248,7 +254,8 @@ if (!empty($event['Attribute'])):?>
 			$extra = null;
 			$extra = 'highlight2';
 			foreach ($attribute['ShadowAttribute'] as $shadowAttribute): ?>
-				<tr class="highlight2">
+				<tr class="highlight2" id="<?php echo $shadowAttribute['id']; ?>">
+                    <td><input type="checkbox" name="sattr_id_check" value="<?php echo $shadowAttribute['id']; ?>"></td>
 					<td class="short highlight2" title="
 						<?php if('' != $shadowAttribute['category']) echo $categoryDefinitions[$shadowAttribute['category']]['desc'];?>
 					">
@@ -327,7 +334,8 @@ if (!empty($event['Attribute'])):?>
 								}
 								//if ($remain === end($remaining)) $extra .= ' highlightBottom';
 								?>
-							<tr class="highlight2">
+							<tr class="highlight2" id="<?php echo $remain['id']; ?>">
+                                <td><input type="checkbox" name="rattr_id_check" value="<?php echo $remain['id']; ?>"></td>
 								<td class="highlight2" title="<?php if('' != $remain['category']) echo $categoryDefinitions[$remain['category']]['desc'];?>">
 								<?php
 									echo h($remain['category']);
@@ -389,7 +397,9 @@ if (!empty($event['Attribute'])):?>
 						endforeach;
 					endif;
 					?>
+                    </tbody>
 				</table>
+                <button id="batch_delete">Delete selected</button>
 				<?php
 				endif; ?>
 		</div>
@@ -437,8 +447,47 @@ $(document).ready(function () {
 		  $('#pivots_active').show();
 		  $('#pivots_inactive').hide();
 		});
+    var isEmpty = function isEmpty(obj) {
+        if (obj == null) return true;
+        if (obj.length > 0)    return false;
+        if (obj.length === 0)  return true;
+        for (var key in obj) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) return false;
+        }
+        return true;
+    }
+    $("#attributes_div").on('click', '.checkall', function(){
+        $(this).closest('table').find('input[name$=_check]').prop('checked', $(this).is(':checked'))
+        // If you're still using jQuery pre 1.9.something (you shouldn't)
+        //$('.select_product').attr('checked', $(this).is(':checked')); // pre 1.9.something
+    });
+    $("#attributes_div").on('click', '#batch_delete', function(){
+        var ids = {};
+        $(this).prev('table').find('tr').each(function(){
+            var id = $(this).attr('id');
+            if(typeof(id) !== "undefined"){
+                ids[id] = id;
+            }
+        });
+        if(!isEmpty(ids)){
+            $.ajax({
+                url: "bla",
+                type: 'POST',
+                data: {
+                    attrs : ids
+                },
+                dataType: 'json',
+                beforeSend: function(){
+                    console.log('pre');
+                },
+                complete: function(){
+                    console.log('completed');
+                },
+                success: function(data){
+                    console.log('post');
+                }
+            });
+        }
+    });
 });
-
-
-
 </script>
