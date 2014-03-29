@@ -1,57 +1,25 @@
 <?php
-$mayModify = (($isAclModify && $event['Event']['user_id'] == $me['id']) || ($isAclModifyOrg && $event['Event']['orgc'] == $me['org']));
+$mayModify = (($isAclModify && $event['Event']['user_id'] == $me['id'] && $event['Event']['orgc'] == $me['org']) || ($isAclModifyOrg && $event['Event']['orgc'] == $me['org']));
 $mayPublish = ($isAclPublish && $event['Event']['orgc'] == $me['org']);
 ?>
-<div class="actions <?php echo $debugMode;?>">
-	<ul class="nav nav-list">
-		<li class="active"><a href="/events/view/<?php echo $event['Event']['id'];?>">View Event</a></li>
-		<li><a href="/logs/event_index/<?php echo $event['Event']['id'];?>">View Event History</a></li>
-		<?php if ($isSiteAdmin || $mayModify): ?>
-		<li><a href="/events/edit/<?php echo $event['Event']['id'];?>">Edit Event</a></li>
-		<li><?php echo $this->Form->postLink('Delete Event', array('action' => 'delete', $event['Event']['id']), null, __('Are you sure you want to delete # %s?', $event['Event']['id'])); ?></li>
-		<li class="divider"></li>
-		<li><a href="/attributes/add/<?php echo $event['Event']['id'];?>">Add Attribute</a></li>
-		<li><a href="/attributes/add_attachment/<?php echo $event['Event']['id'];?>">Add Attachment</a></li>
-		<li><a href="/events/addIOC/<?php echo $event['Event']['id'];?>">Populate from IOC</a></li>
-		<li><a href="/attributes/add_threatconnect/<?php echo $event['Event']['id']; ?>">Populate from ThreatConnect</a></li>
-		<?php else:	?>
-		<li><a href="/shadow_attributes/add/<?php echo $event['Event']['id'];?>">Propose Attribute</a></li>
-		<li><a href="/shadow_attributes/add_attachment/<?php echo $event['Event']['id'];?>">Propose Attachment</a></li>
-		<?php endif; ?>
-		<li class="divider"></li>
-		<?php if ( 0 == $event['Event']['published'] && ($isAdmin || $mayPublish)): ?>
-		<li><?php echo $this->Form->postLink('Publish Event', array('action' => 'alert', $event['Event']['id']), null, 'Are you sure this event is complete and everyone should be informed?'); ?></li>
-		<li><?php echo $this->Form->postLink('Publish (no email)', array('action' => 'publish', $event['Event']['id']), null, 'Publish but do NOT send alert email? Only for minor changes!'); ?></li>
-		<?php else: ?>
-		<!-- ul><li>Alert already sent</li></ul -->
-		<?php endif; ?>
-		<li><a href="/events/contact/<?php echo $event['Event']['id'];?>">Contact Reporter</a></li>
-		<li><a href="/events/xml/download/<?php echo $event['Event']['id'];?>">Download as XML</a></li>
-		<?php if ($event['Event']['published']): ?>
-		<li><a href="/events/downloadOpenIOCEvent/<?php echo $event['Event']['id'];?>">Download as IOC</a></li>
-		<li><a href="/events/csv/download/<?php echo $event['Event']['id'];?>">Download as CSV</a></li>
-		<?php endif; ?>
-		<li class="divider"></li>
-		<li><a href="/events/index">List Events</a></li>
-		<?php if ($isAclAdd): ?>
-		<li><a href="/events/add">Add Event</a></li>
-		<?php endif; ?>
-	</ul>
-</div>
-
+<?php
+	echo $this->element('side_menu', array('menuList' => 'event', 'menuItem' => 'viewEvent', 'mayModify' => $mayModify, 'mayPublish' => $mayPublish));
+?>
 
 <div class="events view">
-
 	<?php
-	if ('true' == Configure::read('CyDefSIG.showorg') || $isAdmin) {
-		echo $this->element('img', array('id' => $event['Event']['orgc']));
-	}
+		if ('true' == Configure::read('MISP.showorg') || $isAdmin) {
+			echo $this->element('img', array('id' => $event['Event']['orgc']));
+			$left = true;
+		}
+		$title = $event['Event']['info'];
+		if (strlen($title) > 55) $title = substr($title, 0, 55) . '...';
 	?>
 	<div class="row-fluid">
 		<div class="span8">
-			<h2>Event</h2>
+			<h2><?php echo nl2br(h($title)); ?></h2>
 			<dl>
-				<dt>ID</dt>
+				<dt>Event ID</dt>
 				<dd>
 					<?php echo h($event['Event']['id']); ?>
 					&nbsp;
@@ -61,7 +29,7 @@ $mayPublish = ($isAclPublish && $event['Event']['orgc'] == $me['org']);
 					<?php echo h($event['Event']['uuid']); ?>
 					&nbsp;
 				</dd>
-				<?php if ('true' == Configure::read('CyDefSIG.showorg') || $isAdmin): ?>
+				<?php if ('true' == Configure::read('MISP.showorg') || $isAdmin): ?>
 				<dt>Org</dt>
 				<dd>
 					<?php echo h($event['Event']['orgc']); ?>
@@ -75,21 +43,91 @@ $mayPublish = ($isAclPublish && $event['Event']['orgc'] == $me['org']);
 					&nbsp;
 				</dd>
 				<?php endif; ?>
-				<?php if ($isSiteAdmin || ($isAdmin && $me['org'] == $event['Event']['org'])): ?>
+				<dt>Contributors</dt>
+				<dd>
+					<?php 
+						foreach($logEntries as $k => $entry) {
+							if ('true' == Configure::read('MISP.showorg') || $isAdmin) {
+								?>
+									<a href="/logs/event_index/<?php echo $event['Event']['id'] . '/' . h($entry['Log']['org']);?>" style="margin-right:2px;text-decoration: none;">
+								<?php 
+									echo $this->element('img', array('id' => $entry['Log']['org'], 'imgSize' => 24, 'imgStyle' => true));
+								?>
+									</a>
+								<?php 
+							}
+						}		
+					?>
+					&nbsp;
+				</dd>
+				<?php if (isset($event['User']['email']) && ($isSiteAdmin || ($isAdmin && $me['org'] == $event['Event']['org']))): ?>
 				<dt>Email</dt>
 				<dd>
 					<?php echo h($event['User']['email']); ?>
 					&nbsp;
 				</dd>
 				<?php endif; ?>
+				<?php 
+					if (Configure::read('MISP.tagging')): ?>
+						<dt>Tags</dt>
+						<dd>
+						<table>
+							<tr>
+						<?php 
+							foreach ($tags as $tag): ?>
+							<td style="padding-right:0px;">
+								<?php if ($isAclTagger): ?>
+								<a href="/events/index/searchtag:<?php echo $tag['Tag']['id']; ?>" class=tagFirstHalf style="background-color:<?php echo $tag['Tag']['colour'];?>;color:<?php echo $this->TextColour->getTextColour($tag['Tag']['colour']);?>"><?php echo h($tag['Tag']['name']); ?></a>
+								<?php else: ?>
+								<a href="/events/index/searchtag:<?php echo $tag['Tag']['id']; ?>" class=tag style="background-color:<?php echo $tag['Tag']['colour'];?>;color:<?php echo $this->TextColour->getTextColour($tag['Tag']['colour']);?>"><?php echo h($tag['Tag']['name']); ?></a>
+								<?php endif; ?>
+							</td>
+							<?php if ($isAclTagger): ?>
+							<td style="padding-left:0px;padding-right:5px;">
+							<?php 
+							echo $this->Form->postLink('x', array('action' => 'removeTag', $event['Event']['id'], $tag['Tag']['id']), array('class' => 'tagSecondHalf', 'title' => 'Delete'), ('Are you sure you want to delete this tag?'));
+							?>
+							</td>
+							<?php endif; ?>
+							<?php 
+							endforeach;
+							if ($isAclTagger) : ?>
+							<td id ="addTagTD" style="display:none;">
+								<?php
+									echo $this->Form->create('', array('action' => 'addTag', 'style' => 'margin:0px;'));
+									echo $this->Form->hidden('id', array('value' => $event['Event']['id']));
+									echo $this->Form->input('tag', array(
+										'options' => array($allTags),
+										'value' => 0,
+										'label' => false,
+										'style' => array('height:22px;padding:0px;margin-bottom:0px;'),
+										'onChange' => 'this.form.submit()',
+										'class' => 'input-large'));
+									echo $this->Form->end();
+								?>
+							</td>
+							<td>
+							<button id="addTagButton" class="btn btn-inverse" style="line-height:10px; padding: 4px 4px;">+</button>
+					
+							</td>
+							<?php else:
+									if (empty($tags)) echo '&nbsp;'; 
+								endif; ?>
+						</tr>
+						</table>
+						</dd>
+				<?php endif; ?>
 				<dt>Date</dt>
 				<dd>
 					<?php echo h($event['Event']['date']); ?>
 					&nbsp;
 				</dd>
-				<dt title="<?php echo $eventDescriptions['risk']['desc'];?>">Risk</dt>
+				<dt title="<?php echo $eventDescriptions['threat_level_id']['desc'];?>">Threat Level</dt>
 				<dd>
-					<?php echo h($event['Event']['risk']); ?>
+					<?php 
+						if ($event['ThreatLevel']['name']) echo h($event['ThreatLevel']['name']);
+						else echo h($event['Event']['threat_level_id']);
+					?>
 					&nbsp;
 				</dd>
 				<dt title="<?php echo $eventDescriptions['analysis']['desc'];?>">Analysis</dt>
@@ -98,11 +136,12 @@ $mayPublish = ($isAclPublish && $event['Event']['orgc'] == $me['org']);
 					&nbsp;
 				</dd>
 				<dt>Distribution</dt>
-				<dd <?php if($event['Event']['distribution'] == 0) echo 'class = "privateRedText"';?>>
-					<?php echo h($distributionLevels[$event['Event']['distribution']] . ', ' . strtolower(substr(($distributionDescriptions[$event['Event']['distribution']]['formdesc']), 0, 1)) . substr($distributionDescriptions[$event['Event']['distribution']]['formdesc'], 1) . '.'); ?>
-					&nbsp;
+				<dd <?php if($event['Event']['distribution'] == 0) echo 'class = "privateRedText"';?> title = "<?php echo h($distributionDescriptions[$event['Event']['distribution']]['formdesc'])?>">
+					<?php 
+						echo h($distributionLevels[$event['Event']['distribution']]); 
+					?>
 				</dd>
-				<dt>Info</dt>
+				<dt>Description</dt>
 				<dd>
 					<?php echo nl2br(h($event['Event']['info'])); ?>
 					&nbsp;
@@ -136,18 +175,42 @@ $mayPublish = ($isAclPublish && $event['Event']['orgc'] == $me['org']);
 	</div>
 	<?php endif; ?>
 	</div>
-	<div>
+	<br />
+	<div class="toggleButtons">
+		<button class="btn btn-inverse toggle-left btn.active qet" id="pivots_active">
+			<span class="icon-minus icon-white" style="vertical-align:top;"></span>Pivots
+		</button>
+		<button class="btn btn-inverse toggle-left qet" style="display:none;" id="pivots_inactive">
+			<span class="icon-plus icon-white" style="vertical-align:top;"></span>Pivots
+		</button>
+		<button class="btn btn-inverse toggle qet" id="attributes_active">
+			<span class="icon-minus icon-white" style="vertical-align:top;"></span>Attributes
+		</button>
+		<button class="btn btn-inverse toggle qet" id="attributes_inactive" style="display:none;">
+			<span class="icon-plus icon-white" style="vertical-align:top;"></span>Attributes
+		</button>
+		<button class="btn btn-inverse toggle-right qet" id="discussions_active">
+			<span class="icon-minus icon-white" style="vertical-align:top;"></span>Discussion
+		</button>
+		<button class="btn btn-inverse toggle-right qet" id="discussions_inactive" style="display:none;">
+			<span class="icon-plus icon-white" style="vertical-align:top;"></span>Discussion
+		</button>
+	</div>
+	<br />
+	<br />
+	<div id="pivots_div">
 		<?php if (sizeOf($allPivots) > 1) echo $this->element('pivot'); ?>
 	</div>
-	<div>
-		<h3>Attributes</h3>
+	<div id="attributes_div">
 		<?php
-if (!empty($event['Attribute'])):?>
+if (!empty($event['Attribute']) || !empty($remaining)):?>
 		<table class="table table-striped table-condensed">
 		<tr>
+			<th>Date</th>
 			<th>Category</th>
 			<th>Type</th>
 			<th>Value</th>
+			<th>Comment</th>
 			<th>Related Events</th>
 			<th title="<?php echo $attrDescriptions['signature']['desc'];?>">IDS</th>
 			<th title="<?php echo $attrDescriptions['distribution']['desc'];?>">Distribution</th>
@@ -161,6 +224,12 @@ if (!empty($event['Attribute'])):?>
 			if (count($attribute['ShadowAttribute'])) $extra .= 'highlight1';
 		?>
 		<tr>
+			<td class= "short <?php echo $extra; ?>">
+			<?php 
+				if (isset($attribute['timestamp'])) echo date('Y-m-d', $attribute['timestamp']);
+				else echo '&nbsp';				
+			?>
+			</td>
 			<?php if($first): ?>
 			<td class= "short <?php echo $extra; ?>" title="<?php if('' != $attribute['category']) echo $categoryDefinitions[$attribute['category']]['desc'];?>">
 				<?php
@@ -174,9 +243,7 @@ if (!empty($event['Attribute'])):?>
 			</td>
 			<?php endif; ?>
 			<td class="short <?php echo $extra; ?>" title="<?php echo $typeDefinitions[$attribute['type']]['desc'];?>">
-
 				<?php echo h($attribute['type']);?>
-
 			</td>
 			<td class="showspaces <?php echo $extra; ?>"><?php $sigDisplay = $attribute['value'];
 			if ('attachment' == $attribute['type'] || 'malware-sample' == $attribute['type'] ) {
@@ -195,8 +262,8 @@ if (!empty($event['Attribute'])):?>
 				echo h($filenameHash[0]);
 				if (isset($filenameHash[1])) echo ' | ' . $filenameHash[1];
 			} elseif ('vulnerability' == $attribute['type']) {
-				if (! is_null(Configure::read('CyDefSig.cveurl'))) {
-					$cveUrl = Configure::read('CyDefSig.cveurl');
+				if (! is_null(Configure::read('MISP.cveurl'))) {
+					$cveUrl = Configure::read('MISP.cveurl');
 				} else {
 					$cveUrl = "http://www.google.com/search?q=";
 				}
@@ -207,13 +274,15 @@ if (!empty($event['Attribute'])):?>
 				$sigDisplay = str_replace("\r", '', $sigDisplay);
 				echo nl2br(h($sigDisplay));
 			}
-				?></td>
-				<td class="shortish <?php echo $extra; ?>">
+				?>
+			</td>
+			<td class="showspaces bitwider <?php echo $extra; ?>"><?php echo h($attribute['comment']); ?></td>
+			<td class="shortish <?php echo $extra; ?>">
 				<?php
 			$first = 0;
 			?>
 				<ul class="inline" style="margin:0px;">
-			<?php 
+			<?php
 			if (isset($relatedAttributes[$attribute['id']]) && (null != $relatedAttributes[$attribute['id']])) {
 				foreach ($relatedAttributes[$attribute['id']] as $relatedAttribute) {
 					echo '<li style="padding-right: 0px; padding-left:0px;" title ="' . h($relatedAttribute['info']) . '"><span>';
@@ -227,7 +296,7 @@ if (!empty($event['Attribute'])):?>
 					echo ' ';
 				}
 			}
-				?>&nbsp;
+				?>
 				</ul>
 				</td>
 				<td class="short <?php echo $extra; ?>"><?php echo $attribute['to_ids'] ? 'Yes' : 'No';?></td>
@@ -259,6 +328,7 @@ if (!empty($event['Attribute'])):?>
 			$extra = 'highlight2';
 			foreach ($attribute['ShadowAttribute'] as $shadowAttribute): ?>
 				<tr class="highlight2">
+					<td class= "short <?php echo $extra; ?>">&nbsp</td>
 					<td class="short highlight2" title="
 						<?php if('' != $shadowAttribute['category']) echo $categoryDefinitions[$shadowAttribute['category']]['desc'];?>
 					">
@@ -303,6 +373,11 @@ if (!empty($event['Attribute'])):?>
 							}
 						?></td>
 					<td class="short highlight2">
+					<?php 
+						echo h($shadowAttribute['comment']);
+					?>
+					</td>
+					<td class="short highlight2">
 					</td>
 					<td class="short highlight2">
 					<?php
@@ -312,10 +387,12 @@ if (!empty($event['Attribute'])):?>
 					<td class="short highlight2"></td>
 					<td class="short action-links highlight2">
 					<?php
-						if (($event['Event']['org'] == $me['org'] && $mayPublish) || $isSiteAdmin) {
-							echo $this->Html->link('', array('controller' => 'shadow_attributes', 'action' => 'accept', $shadowAttribute['id']), array('class' => 'icon-ok', 'title' => 'Accept'));
+						if (($event['Event']['orgc'] == $me['org'] && $mayModify) || $isSiteAdmin) {
+							echo $this->Form->postLink('', array('controller' => 'shadow_attributes', 'action' => 'accept', $shadowAttribute['id']), array('class' => 'icon-ok', 'title' => 'Accept'), 'Are you sure you want to accept this proposal?');
 						}
-						echo $this->Form->postLink('', array('controller' => 'shadow_attributes', 'action' => 'discard', $shadowAttribute['id']), array('class' => 'icon-trash', 'title' => 'Discard'), 'Are you sure you want to discard this proposal?');
+						if (($event['Event']['orgc'] == $me['org'] && $mayModify) || $isSiteAdmin || ($shadowAttribute['org'] == $me['org'])) {
+							echo $this->Form->postLink('', array('controller' => 'shadow_attributes', 'action' => 'discard', $shadowAttribute['id']), array('class' => 'icon-trash', 'title' => 'Discard'), 'Are you sure you want to discard this proposal?');
+						}
 					?>
 					</td>
 				</tr>
@@ -336,6 +413,11 @@ if (!empty($event['Attribute'])):?>
 								//if ($remain === end($remaining)) $extra .= ' highlightBottom';
 								?>
 							<tr class="highlight2">
+								<td class= "short <?php echo $extra; ?>">
+									<?php 
+										echo '&nbsp';				
+									?>
+								</td>
 								<td class="highlight2" title="<?php if('' != $remain['category']) echo $categoryDefinitions[$remain['category']]['desc'];?>">
 								<?php
 									echo h($remain['category']);
@@ -376,6 +458,11 @@ if (!empty($event['Attribute'])):?>
 										}
 									?></td>
 								<td class="short highlight2">
+								<?php 
+									echo h($remain['comment']);
+								?>
+								</td>
+								<td class="short highlight2">
 								</td>
 								<td class="short highlight2">
 									<?php
@@ -384,10 +471,12 @@ if (!empty($event['Attribute'])):?>
 									<td class="short highlight2"></td>
 									<td class="short action-links highlight2">
 									<?php
-										if (($event['Event']['org'] == $me['org'] && $mayPublish) || $isSiteAdmin) {
-											echo $this->Html->link('', array('controller' => 'shadow_attributes', 'action' => 'accept', $remain['id']), array('class' => 'icon-ok', 'title' => 'Accept'));
+										if (($event['Event']['orgc'] == $me['org'] && $mayModify) || $isSiteAdmin) {
+											echo $this->Form->postLink('', array('controller' => 'shadow_attributes', 'action' => 'accept', $remain['id']), array('class' => 'icon-ok', 'title' => 'Accept'), 'Are you sure you want to accept this proposal?');
 										}
-										echo $this->Form->postLink('', array('controller' => 'shadow_attributes', 'action' => 'discard', $remain['id']), array('class' => 'icon-trash', 'title' => 'Discard'), 'Are you sure you want to discard this proposal?');
+										if (($event['Event']['orgc'] == $me['org'] && $mayModify) || $isSiteAdmin || ($remain['org'] == $me['org'])) {
+											echo $this->Form->postLink('', array('controller' => 'shadow_attributes', 'action' => 'discard', $remain['id']), array('class' => 'icon-trash', 'title' => 'Discard'), 'Are you sure you want to discard this proposal?');
+										}
 									?>
 								</td>
 							</tr>
@@ -399,6 +488,11 @@ if (!empty($event['Attribute'])):?>
 				<?php
 				endif; ?>
 		</div>
+		<div id="discussions_div">
+			<?php
+				echo $this->element('eventdiscussion');
+			?>
+		</div>
 </div>
 <script type="text/javascript">
 // tooltips
@@ -408,5 +502,43 @@ $(document).ready(function () {
 		'container' : 'body',
 		delay: { show: 500, hide: 100 }
 		});
+	$('#discussions_active').click(function() {
+		  $('#discussions_div').hide();
+		  $('#discussions_active').hide();
+		  $('#discussions_inactive').show();
+		});
+	$('#discussions_inactive').click(function() {
+		  $('#discussions_div').show();
+		  $('#discussions_active').show();
+		  $('#discussions_inactive').hide();
+		});
+	$('#attributes_active').click(function() {
+		  $('#attributes_div').hide();
+		  $('#attributes_active').hide();
+		  $('#attributes_inactive').show();
+		});
+	$('#attributes_inactive').click(function() {
+		  $('#attributes_div').show();
+		  $('#attributes_active').show();
+		  $('#attributes_inactive').hide();
+		});
+	$('#pivots_active').click(function() {
+		  $('#pivots_div').hide();
+		  $('#pivots_active').hide();
+		  $('#pivots_inactive').show();
+		});
+	$('#pivots_inactive').click(function() {
+		  $('#pivots_div').show();
+		  $('#pivots_active').show();
+		  $('#pivots_inactive').hide();
+		});
+
+	$('#addTagButton').click(function() {
+		$('#addTagTD').show();
+		$('#addTagButton').hide();
+	});
 });
+
+
+
 </script>

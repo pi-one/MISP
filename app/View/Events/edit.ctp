@@ -1,3 +1,7 @@
+<?php
+$mayModify = (($isAclModify && $event['Event']['user_id'] == $me['id'] && $event['Event']['orgc'] == $me['org']) || ($isAclModifyOrg && $event['Event']['orgc'] == $me['org']));
+$mayPublish = ($isAclPublish && $event['Event']['orgc'] == $me['org']);
+?>
 <div class="events form">
 <?php echo $this->Form->create('Event');?>
 	<fieldset>
@@ -8,13 +12,13 @@
 			'type' => 'text',
 			'class' => 'datepicker'
 	));
-if ('true' == Configure::read('CyDefSIG.sync')) {
+if ('true' == Configure::read('MISP.sync')) {
 	echo $this->Form->input('distribution', array(
 		'options' => array($distributionLevels),
 		'label' => 'Distribution',
 	));
 }
-	echo $this->Form->input('risk', array(
+	echo $this->Form->input('threat_level_id', array(
 			'div' => 'input clear'
 			));
 	echo $this->Form->input('analysis', array(
@@ -22,7 +26,11 @@ if ('true' == Configure::read('CyDefSIG.sync')) {
 			));
 	echo $this->Form->input('info', array(
 			'div' => 'clear',
-			'class' => 'input-xxlarge'
+			'label' => 'Event Description',
+			'div' => 'clear',
+			'type' => 'text',
+			'class' => 'form-control span6',
+			'placeholder' => 'Quick Event Description or Tracking Info'
 			));
 
 ?>
@@ -32,19 +40,9 @@ echo $this->Form->button('Submit', array('class' => 'btn btn-primary'));
 echo $this->Form->end();
 ?>
 </div>
-<div class="actions <?php echo $debugMode;?>">
-	<ul class="nav nav-list">
-		<li><a href="/events/view/<?php echo $this->request->data['Event']['id'];?>">View Event</a></li>
-		<li><a href="/logs/event_index/<?php echo $this->request->data['Event']['id'];?>">View Event History</a></li>
-		<li class="active"><a href="/events/edit/<?php echo $this->request->data['Event']['id'];?>">Edit Event</a></li>
-		<li><?php echo $this->Form->postLink('Delete Event', array('action' => 'delete', $this->request->data['Event']['id']), null, __('Are you sure you want to delete # %s?', $this->request->data['Event']['id'])); ?></li>
-		<li class="divider"></li>
-		<li><a href="/events/index">List Events</a></li>
-		<?php if ($isAclAdd): ?>
-		<li><a href="/events/add">Add Event</a></li>
-		<?php endif; ?>
-	</ul>
-</div>
+<?php
+	echo $this->element('side_menu', array('menuList' => 'event', 'menuItem' => 'editEvent', 'mayModify' => $mayModify, 'mayPublish' => $mayPublish));
+?>
 
 <script type="text/javascript">
 //
@@ -52,7 +50,7 @@ echo $this->Form->end();
 //
 var formInfoValues = {
 		'EventDistribution' : new Array(),
-		'EventRisk' : new Array(),
+		'EventThreatLevelId' : new Array(),
 		'EventAnalysis' : new Array()
 };
 
@@ -62,8 +60,7 @@ foreach ($distributionDescriptions as $type => $def) {
 	echo "formInfoValues['EventDistribution']['" . addslashes($type) . "'] = \"" . addslashes($info) . "\";\n";	// as we output JS code we need to add slashes
 }
 foreach ($riskDescriptions as $type => $def) {
-	$info = isset($def['formdesc']) ? $def['formdesc'] : $def['desc'];
-	echo "formInfoValues['EventRisk']['" . addslashes($type) . "'] = \"" . addslashes($info) . "\";\n";	// as we output JS code we need to add slashes
+	echo "formInfoValues['EventThreatLevelId']['" . addslashes($type) . "'] = \"" . addslashes($def) . "\";\n";	// as we output JS code we need to add slashes
 }
 foreach ($analysisDescriptions as $type => $def) {
 	$info = isset($def['formdesc']) ? $def['formdesc'] : $def['desc'];
@@ -73,11 +70,7 @@ foreach ($analysisDescriptions as $type => $def) {
 
 $(document).ready(function() {
 
-	$("#EventAnalysis, #EventRisk, #EventDistribution").on('mouseleave', function(e) {
-	    $('#'+e.currentTarget.id).popover('destroy');
-	});
-
-	$("#EventAnalysis, #EventRisk, #EventDistribution").on('mouseover', function(e) {
+	$("#EventAnalysis, #EventThreatLevelId, #EventDistribution").on('mouseover', function(e) {
 	    var $e = $(e.target);
 	    if ($e.is('option')) {
 	        $('#'+e.currentTarget.id).popover('destroy');
@@ -92,7 +85,7 @@ $(document).ready(function() {
 	// workaround for browsers like IE and Chrome that do now have an onmouseover on the 'options' of a select.
 	// disadvangate is that user needs to click on the item to see the tooltip.
 	// no solutions exist, except to generate the select completely using html.
-	$("#EventAnalysis, #EventRisk, #EventDistribution").on('change', function(e) {
+	$("#EventAnalysis, #EventThreatLevelId, #EventDistribution").on('change', function(e) {
 		var $e = $(e.target);
         $('#'+e.currentTarget.id).popover('destroy');
         $('#'+e.currentTarget.id).popover({

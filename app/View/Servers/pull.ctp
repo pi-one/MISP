@@ -21,10 +21,19 @@ else:?>
 	</ul>
 	<?php
 endif;?>
-</div>
-<div class="actions <?php echo $debugMode;?>">
-	<ul class="nav nav-list">
-		<li class="active"><?php echo $this->Html->link('List Servers', array('controller' => 'servers', 'action' => 'index'));?></li>
-		<li><?php if ($isAclAdd && $me['org'] == 'ADMIN') echo $this->Html->link('New Server', array('controller' => 'servers', 'action' => 'add')); ?></li>
+	<h2>Proposals pulled</h2>
+	<?php
+if (0 == count($pulledProposals)):?>
+	<p>No proposals pulled</p>
+	<?php
+else:?>
+	<ul>
+	<?php foreach ($pulledProposals as $e => $p) echo '<li>Event ' . $e . ' : ' . $p . ' proposal(s).</li>'; ?>
 	</ul>
+	<?php
+endif;?>
+
 </div>
+<?php 
+	echo $this->element('side_menu', array('menuList' => 'sync', 'menuItem' => 'pull'));
+?>

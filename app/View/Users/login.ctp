@@ -2,7 +2,7 @@
 	<?php
 		echo $this->Session->flash('auth');
 	?>
-<table style="width:1250px;margin-left:auto;margin-right:auto;">
+<table style="width:1200px;margin-left:auto;margin-right:auto;">
 	<tr>
 	<td style="text-align:right;width:250px;padding-right:50px">
 	<?php 
@@ -11,7 +11,7 @@
 		<?php if (Configure::read('MISP.welcome_logo')): ?>
 			<img src="
 					<?php
-					echo Configure::read('CyDefSig.url') . '/img/';
+					echo Configure::read('MISP.url') . '/img/';
 					echo Configure::read('MISP.welcome_logo');
 					?>
 			.png" alt="" />
@@ -20,16 +20,16 @@
 	<?php
 		}
 	?>
-	<td style="width:650px">
+	<td style="width:600px">
 		<span style="font-size:18px;"><?php
 			if (true == Configure::read('MISP.welcome_text_top')) {
 				echo Configure::read('MISP.welcome_text_top');
 			}?></span><br /><br />
 		<div class="nav" style="font-weight:bold; font-size:30px;text-align:center;">
-			<span style="color: #0088cc;">M</span><span style="color: #000000;">alware</span>
-			<span style="color: #0088cc;">I</span><span style="color: #000000;">nformation </span>
-			<span style="color: #0088cc;">S</span><span style="color: #000000;">haring</span>
-			<span style="color: #0088cc;">P</span><span style="color: #000000;">latform</span>
+			<span class="logoBlue">M</span><span style="color: #000000;">alware</span>
+			<span class="logoBlue">I</span><span style="color: #000000;">nformation </span>
+			<span class="logoBlue">S</span><span style="color: #000000;">haring</span>
+			<span class="logoBlue">P</span><span style="color: #000000;">latform</span>
 		</div>
 		<?php
 			if (true == Configure::read('MISP.welcome_text_bottom')) {
@@ -57,7 +57,7 @@
 		<?php if (Configure::read('MISP.welcome_logo2')): ?>
 			<img src="
 				<?php
-				echo Configure::read('CyDefSig.url') . '/img/';
+				echo Configure::read('MISP.url') . '/img/';
 				echo Configure::read('MISP.welcome_logo2');
 				?>
 		.png" alt="" />

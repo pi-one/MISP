@@ -29,9 +29,13 @@ if ($isSearch == 1) {
 	<table class="table table-striped table-hover table-condensed">
 	<tr>
 			<th><?php echo $this->Paginator->sort('event_id');?></th>
+			<?php if ('true' == Configure::read('MISP.showorg') || $isAdmin): ?>
+			<th><?php echo $this->Paginator->sort('orgc', 'Org');?></th>
+			<?php endif; ?>
 			<th><?php echo $this->Paginator->sort('category');?></th>
 			<th><?php echo $this->Paginator->sort('type');?></th>
 			<th><?php echo $this->Paginator->sort('value');?></th>
+			<th><?php echo $this->Paginator->sort('comment');?></th>
 			<th<?php echo ' title="' . $attrDescriptions['signature']['desc'] . '"';?>>
 			<?php echo $this->Paginator->sort('IDS');?></th>
 			<th class="actions">Actions</th>
@@ -57,15 +61,26 @@ foreach ($attributes as $attribute):
 			<div onclick="document.location='/events/view/<?php echo $attribute['Event']['id'];?>';">
 			<?php
 				if ($attribute['Event']['orgc'] == $me['org']) {
-					$class='class="SameOrgLink"';
+					$style='style="color:red;"';
 				} else {
-					$class='';
+					$style='';
 				}
 				$currentCount++;
 			?>
-				<a href="/events/view/<?php echo $attribute['Event']['id'];?>" <?php echo $class;?>><?php echo $attribute['Event']['id'];?></a>
+				<a href="/events/view/<?php echo $attribute['Event']['id'];?>" <?php echo $style;?>><?php echo $attribute['Event']['id'];?></a>
 			</div>
 		</td>
+		<?php if ('true' == Configure::read('MISP.showorg') || $isAdmin): ?>
+		<td class="short" onclick="document.location.href ='/events/view/<?php echo $attribute['Event']['id'];?>'">
+			<?php
+				$imgRelativePath = 'orgs' . DS . h($attribute['Event']['orgc']) . '.png';
+				$imgAbsolutePath = APP . WEBROOT_DIR . DS . 'img' . DS . $imgRelativePath;
+				if (file_exists($imgAbsolutePath)) echo $this->Html->image('orgs/' . h($attribute['Event']['orgc']) . '.png', array('alt' => h($attribute['Event']['orgc']), 'title' => h($attribute['Event']['orgc']), 'style' => 'width:24px; height:24px'));
+				else echo $this->Html->tag('span', h($attribute['Event']['orgc']), array('class' => 'welcome', 'style' => 'float:left;'));
+			?>
+			&nbsp;
+		</td>
+		<?php endif;?>
 		<td title="<?php echo $categoryDefinitions[$attribute['Attribute']['category']]['desc'];?>" class="short" onclick="document.location='/events/view/<?php echo $attribute['Event']['id'];?>';">
 		<?php echo $attribute['Attribute']['category']; ?>&nbsp;</td>
 		<td title="<?php echo $typeDefinitions[$attribute['Attribute']['type']]['desc'];?>" class="short" onclick="document.location='/events/view/<?php echo $attribute['Event']['id'];?>';">
@@ -83,7 +98,11 @@ foreach ($attributes as $attribute):
 			} else {
 				echo $sigDisplay;
 			}
-			?></td>
+			?>
+		</td>
+		<td onclick="document.location ='document.location ='/events/view/<?php echo $attribute['Event']['id'];?>';">
+			<?php echo h($attribute['Attribute']['comment']); ?>&nbsp;
+		</td>
 		<td class="short" onclick="document.location ='document.location ='/events/view/<?php echo $attribute['Event']['id'];?>';">
 			<?php echo $attribute['Attribute']['to_ids'] ? 'Yes' : 'No'; ?>&nbsp;
 		</td>
@@ -119,36 +138,16 @@ endforeach;
     </div>
 
 </div>
-<div class="actions <?php echo $debugMode;?>">
-	<ul class="nav nav-list">
-		<li><a href="/events/index">List Events</a></li>
-		<?php if ($isAclAdd): ?>
-		<li><a href="/events/add">Add Event</a></li>
-		<?php endif; ?>
-		<li class="divider"></li>
-		<?php
-		if ($isSearch == 1){
-			$searchClass = 'class="active"';
-			$listClass = '';
-		} else {
-			$searchClass = '';
-			$listClass = 'class="active"';
-		}
-		?>
-		<li <?php echo $listClass;?>><a href="/attributes/index">List Attributes</a></li>
-		<li <?php echo $searchClass;?>><a href="/attributes/search">Search Attributes</a></li>
-		<?php if ($isSearch == 1): ?>
-		<li class="divider"></li>
-		<li><a href="/events/downloadSearchResult">Download results as XML</a></li>
-		<li><a href="/events/csv/download/search">Download results as CSV</a></li>
-		<?php endif; ?>
-		<li class="divider"></li>
-		<li><a href="/events/export">Export</a></li>
-		<?php if ($isAclAuth): ?>
-		<li><a href="/events/automation">Automation</a></li>
-		<?php endif;?>
-	</ul>
-</div>
+<?php
+if ($isSearch == 1){
+	$class = 'searchAttributes2';
+} else {
+	$class = 'listAttributes';
+}
+?>
+<?php 
+	echo $this->element('side_menu', array('menuList' => 'event-collection', 'menuItem' => $class));
+?>
 <script type="text/javascript">
 // tooltips
 $(document).ready(function () {

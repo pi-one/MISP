@@ -28,7 +28,7 @@ class LogsController extends AppController {
 		parent::beforeFilter();
 
 		// permit reuse of CSRF tokens on the search page.
-		if ('admin_search' == $this->request->params['action']) {
+		if ('search' == $this->request->params['action']) {
 			$this->Security->csrfUseOnce = false;
 		}
 	}
@@ -41,7 +41,7 @@ class LogsController extends AppController {
 	public function admin_index() {
 		if(!$this->userRole['perm_audit']) $this->redirect(array('controller' => 'events', 'action' => 'index', 'admin' => false));
 		$this->set('isSearch', 0);
-		if ($this->Auth->user('org') == 'ADMIN') {
+		if ($this->_isSiteAdmin()) {
 			$this->AdminCrud->adminIndex();
 		} else {
 			$orgRestriction = null;
@@ -59,7 +59,7 @@ class LogsController extends AppController {
 	}
 
 	// Shows a minimalistic history for the currently selected event
-	public function event_index($id) {
+	public function event_index($id, $org = null) {
 		// check if the user has access to this event...
 		$mayModify = false;
 		$mineOrAdmin = false;
@@ -67,7 +67,7 @@ class LogsController extends AppController {
 		$this->Event->recursive = -1;
 		$this->Event->read(null, $id);
 		// send unauthorised people away. Only site admins and users of the same org may see events that are "your org only". Everyone else can proceed for all other levels of distribution
-		if ($this->Auth->user('org') != 'ADMIN') {
+		if (!$this->_isSiteAdmin()) {
 			if ($this->Event->data['Event']['distribution'] == 0) {
 				if ($this->Event->data['Event']['org'] != $this->Auth->user('org')) {
 					$this->Session->setFlash(__('You don\'t have access to view this event.'));
@@ -81,32 +81,45 @@ class LogsController extends AppController {
 		}
 		$this->set('published', $this->Event->data['Event']['published']);
 		if ($mineOrAdmin && $this->userRole['perm_modify']) $mayModify = true;
-		// get a list of the attributes that belong to the event
-		$this->loadModel('Attribute');
-		$this->Attribute->recursive = -1;
-		$attributes = $this->Attribute->find('all', array(
-				'conditions' => array('event_id' => $id),
-				'fields' => array ('id', 'event_id', 'distribution'),
-				'contain' => 'Event.distribution'
-		));
-		// get a list of all log entries that affect the current event or any of the attributes found above
+		
+		
 		$conditions['OR'][] = array('AND' => array('Log.model LIKE' => 'Event', 'Log.model_id LIKE' => $id));
-		$conditions['OR'][] = array('AND' => array ('Log.model LIKE' => 'Attribute'));
-		// set a condition for the attribute, otherwise an empty event will show all attributes in the log
-		$conditions['OR'][1]['AND']['OR'][0] = array('Log.model_id LIKE' => null);
-		foreach ($attributes as $a) {
-			// Hop over the attributes that are private if the user should is not of the same org and not an admin
-			if ($mineOrAdmin || ($a['Event']['distribution'] != 0 && $a['Attribute']['distribution'] != 0)) {
-				$conditions['OR'][1]['AND']['OR'][] = array('Log.model_id LIKE' => $a['Attribute']['id']);
+		if ($org) $conditions['AND'][] = array('Log.org LIKE' => $org, 'Log.model LIKE' => 'ShadowAttribute');
+		// if we are not the owners of the event and we aren't site admins, then we should only see the entries for attributes that are not private
+		// This means that we will not be able to see deleted attributes - since those could have been private
+		if (!$mayModify) {
+		// get a list of the attributes that belong to the event
+		
+			$this->loadModel('Attribute');
+			$this->Attribute->recursive = -1;
+			$attributes = $this->Attribute->find('all', array(
+					'conditions' => array('event_id' => $id),
+					'fields' => array ('id', 'event_id', 'distribution'),
+					'contain' => 'Event.distribution'
+			));
+			// get a list of all log entries that affect the current event or any of the attributes found above
+			$conditions['OR'][] = array('AND' => array ('Log.model LIKE' => 'Attribute'));
+			// set a condition for the attribute, otherwise an empty event will show all attributes in the log
+			$conditions['OR'][1]['AND']['OR'][0] = array('Log.model_id LIKE' => null);
+			foreach ($attributes as $a) {
+				// Hop over the attributes that are private if the user should is not of the same org and not an admin
+				if ($mineOrAdmin || ($a['Event']['distribution'] != 0 && $a['Attribute']['distribution'] != 0)) {
+					$conditions['OR'][1]['AND']['OR'][] = array('Log.model_id LIKE' => $a['Attribute']['id']);
+				}
 			}
+		} else {
+			$conditions['OR'][] = array('AND' => array ('Log.model LIKE' => 'Attribute', 'Log.title LIKE' => '%Event (' . $id . ')%'));
 		}
-		$fieldList = array('title', 'created', 'model', 'model_id', 'action', 'change');
+		$conditions['OR'][] = array('AND' => array ('Log.model LIKE' => 'ShadowAttribute', 'Log.title LIKE' => '%Event (' . $id . ')%'));
+		//$conditions['OR'][] = array('AND' => array ('Log.model LIKE' => 'ShadowAttribute', 'Log.title LIKE' => '%Event (' . $id . ')%'));
+		$fieldList = array('title', 'created', 'model', 'model_id', 'action', 'change', 'org');
 		$this->paginate = array(
 				'limit' => 60,
 				'conditions' => $conditions,
 				'order' => array('Log.id' => 'DESC'),
 				'fields' => $fieldList
 		);
+		$this->set('event', $this->Event->data);
 		$this->set('list', $this->paginate());
 		$this->set('eventId', $id);
 		$this->set('mayModify', $mayModify);
@@ -118,7 +131,7 @@ class LogsController extends AppController {
 		if(!$this->userRole['perm_audit']) $this->redirect(array('controller' => 'events', 'action' => 'index', 'admin' => false));
 		$fullAddress = array('/admin/logs/search', '/logs/admin_search'); // FIXME remove this crap check
 		$orgRestriction = null;
-		if ($this->Auth->user('org') == 'ADMIN') {
+		if ($this->_isSiteAdmin()) {
 			$orgRestriction = false;
 		} else {
 			$orgRestriction = $this->Auth->user('org');
@@ -219,5 +232,15 @@ class LogsController extends AppController {
 			// set the same view as the index page
 			$this->render('admin_index');
 		}
+	}
+
+	public function returnDates($org = 'all') {
+		$data = $this->Log->returnDates($org);
+		$this->set('data', $data);
+		$this->set('_serialize', 'data');
+	}
+	
+	public function maxDateActivity() {
+		return $this->Log->maxDateActivity();
 	}
 }

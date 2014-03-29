@@ -10,7 +10,7 @@ App::uses('File', 'Utility');
  */
 class AttributesController extends AppController {
 
-	public $components = array('Security', 'RequestHandler');
+	public $components = array('Security', 'RequestHandler', 'Cidr');
 
 	public $paginate = array(
 			'limit' => 60,
@@ -21,6 +21,11 @@ class AttributesController extends AppController {
 
 	public function beforeFilter() {
 		parent::beforeFilter();
+
+		$this->Auth->allow('restSearch');
+		$this->Auth->allow('returnAttributes');
+		$this->Auth->allow('downloadAttachment');
+		$this->Auth->allow('text');
 
 		// permit reuse of CSRF tokens on the search page.
 		if ('search' == $this->request->params['action']) {
@@ -76,6 +81,7 @@ class AttributesController extends AppController {
  */
 	public function index() {
 		$this->Attribute->recursive = 0;
+		$this->Attribute->contain = array('Event.id', 'Event.orgc', 'Event.org');
 		$this->set('isSearch', 0);
 		$this->set('attributes', $this->paginate());
 		$this->set('attrDescriptions', $this->Attribute->fieldDescriptions);
@@ -91,6 +97,9 @@ class AttributesController extends AppController {
  * @throws NotFoundException // TODO Exception
  */
 	public function add($eventId = null) {
+		if (!$this->userRole['perm_add']) {
+			throw new MethodNotAllowedException('You don\'t have permissions to create attributes');
+		}
 		if ($this->request->is('post')) {
 			$this->loadModel('Event');
 			$date = new DateTime();
@@ -166,7 +175,7 @@ class AttributesController extends AppController {
 					//$existingAttributeCount = $this->Attribute->find('count', array('conditions' => array('Attribute.uuid' => $this->request->data['Attribute']['uuid'])));
 					if ($existingAttribute) {
 						// TODO RESTfull, set responce location header..so client can find right URL to edit
-						$this->response->header('Location', Configure::read('CyDefSIG.baseurl') . '/attributes/' . $existingAttribute['Attribute']['id']);
+						$this->response->header('Location', Configure::read('MISP.baseurl') . '/attributes/' . $existingAttribute['Attribute']['id']);
 						$this->response->send();
 						$this->view($this->Attribute->getId());
 						$this->render('view');
@@ -246,19 +255,18 @@ class AttributesController extends AppController {
 		if (!$this->Attribute->exists()) {
 			throw new NotFoundException(__('Invalid attribute'));
 		}
-
 		$this->Attribute->read();
-		if (!$this->_isSiteAdmin() && 
-		$this->Auth->user('org') != 
-		$this->Attribute->data['Event']['org'] && 
-		($this->Attribute->data['Event']['distribution'] == 0 || 
-			$this->Attribute->data['Attribute']['distribution'] == 0
-		)) {
-		throw new UnauthorizedException('You do not have the permission to view this event.');
+		if (!$this->_isSiteAdmin() &&
+			$this->Auth->user('org') !=
+			$this->Attribute->data['Event']['org'] &&
+			($this->Attribute->data['Event']['distribution'] == 0 ||
+				$this->Attribute->data['Attribute']['distribution'] == 0
+			)) {
+			throw new UnauthorizedException('You do not have the permission to view this event.');
 		}
 		$this->__downloadAttachment($this->Attribute->data['Attribute']);
-  	}
-  	
+	}
+
 	private function __downloadAttachment($attribute) {
 		$path = "files" . DS . $attribute['event_id'] . DS;
 		$file = $attribute['id'];
@@ -399,12 +407,12 @@ class AttributesController extends AppController {
 				$temp['Attribute']['type'] = 'filename|sha256';
 				$temp['Attribute']['value'] = $filename . '|' .$sha256;
 				$temp['Attribute']['uuid'] = String::uuid();
-				$this->Attribute->save($temp, array('fieldlist' => array('value', 'type', 'category', 'event_id', 'distribution', 'to_ids')));
+				$this->Attribute->save($temp, array('fieldlist' => array('value', 'type', 'category', 'event_id', 'distribution', 'to_ids', 'comment')));
 				$this->Attribute->create();
 				$temp['Attribute']['type'] = 'filename|sha1';
 				$temp['Attribute']['value'] = $filename . '|' .$sha1;
 				$temp['Attribute']['uuid'] = String::uuid();
-				$this->Attribute->save($temp, array('fieldlist' => array('value', 'type', 'category', 'event_id', 'distribution', 'to_ids')));
+				$this->Attribute->save($temp, array('fieldlist' => array('value', 'type', 'category', 'event_id', 'distribution', 'to_ids', 'comment')));
 			}
 
 
@@ -491,7 +499,6 @@ class AttributesController extends AppController {
 			}
 
 			// parse uploaded csv file
-			$filename = '/Users/chri/Downloads/ThreatConnectExport2.csv';
 			$filename = $tmpfile->path;
 			$header = NULL;
 			$entries = array();
@@ -504,13 +511,11 @@ class AttributesController extends AppController {
 				}
 				fclose($handle);
 			}
-
 			// verify header of the file (first row)
-			$expected_header = array(
-					'Type', 'Value', 'Rating', 'Confidence', 'DateAdded',
-					'Description', 'Source', 'DNS', 'Whois');
-			if ($header != $expected_header) {
-				$this->Session->setFlash('Incorrect ThreatConnect headers. Expecting: '.implode(',', $expected_header), 'default', array(), 'error');
+			$required_headers = array('Type', 'Value', 'Confidence', 'Description', 'Source');
+			
+			if (count(array_intersect($header, $required_headers)) != count($required_headers)) {
+				$this->Session->setFlash('Incorrect ThreatConnect headers. The minimum required headers are: '.implode(',', $required_headers), 'default', array(), 'error');
 				$this->redirect(array('controller' => 'attributes', 'action' => 'add_threatconnect', $this->request->data['Attribute']['event_id']));
 			}
 
@@ -523,12 +528,15 @@ class AttributesController extends AppController {
 				$attribute['event_id'] = $this->request->data['Attribute']['event_id'];
 				$attribute['value'] = $entry['Value'];
 				$attribute['to_ids'] = ($entry['Confidence'] > 51) ? 1 : 0; // To IDS if high confidence
-				$attribute['distribution'] = 3; // 'All communities'
-				if (Configure::read('MISP.default_attribute_distribution') === 'event') {
-					$attribute['distribution'] = $this->Event->data['Event']['distribution'];
-				} else {
-					$attribute['distribution'] = Configure::read('MISP.default_attribute_distribution');
+				$attribute['comment'] = 'ThreatConnect: ' . $entry['Description'];
+				$attribute['distribution'] = '3'; // 'All communities'
+				if (Configure::read('MISP.default_attribute_distribution') != null) {
+					if (Configure::read('MISP.default_attribute_distribution') === 'event') {
+						$attribute['distribution'] = $this->Event->data['Event']['distribution'];
+					} else {
+						$attribute['distribution'] = Configure::read('MISP.default_attribute_distribution');
 					}
+				}
 				switch($entry['Type']) {
 					case 'Address':
 						$attribute['category'] = 'Network activity';
@@ -589,7 +597,7 @@ class AttributesController extends AppController {
 				else
 					$attribute['type'] = 'comment';
 				$attribute['value'] = $reference;
-				$attribute['distribution'] = '3'; // 'All communities'
+				$attribute['distribution'] = 3; // 'All communities'
 				// add attribute to the array that will be saved
 				$attributes[] = $attribute;
 			}
@@ -639,9 +647,9 @@ class AttributesController extends AppController {
 			$uuid = $this->Attribute->data['Attribute']['uuid'];
 		}
 		if (!$this->_isSiteAdmin()) {
-			// 
+			//
 			if ($this->Attribute->data['Event']['orgc'] == $this->Auth->user('org')
-				&& (($this->userRole['perm_modify'] && $this->Attribute->data['Event']['user_id'] != $this->Auth->user('id')) 
+				&& (($this->userRole['perm_modify'] && $this->Attribute->data['Event']['user_id'] != $this->Auth->user('id'))
 					|| $this->userRole['perm_modify_org'])) {
 				// Allow the edit
 			} else {
@@ -686,7 +694,7 @@ class AttributesController extends AppController {
 			} else {
 				$this->request->data['Attribute']['timestamp'] = $date->getTimestamp();
 			}
-			$fieldList = array('category', 'type', 'value1', 'value2', 'to_ids', 'distribution', 'value', 'timestamp');
+			$fieldList = array('category', 'type', 'value1', 'value2', 'to_ids', 'distribution', 'value', 'timestamp', 'comment');
 
 			$this->loadModel('Event');
 			$this->Event->id = $eventId;
@@ -723,6 +731,7 @@ class AttributesController extends AppController {
 		$this->loadModel('Event');
 		$this->Event->id = $eventId;
 		$this->Event->read();
+		$this->set('published', $this->Event->data['Event']['published']);
 		// needed for RBAC
 		// combobox for types
 		$types = array_keys($this->Attribute->typeDefinitions);
@@ -763,7 +772,7 @@ class AttributesController extends AppController {
 			throw new NotFoundException(__('Invalid attribute'));
 		}
 
-		if ('true' == Configure::read('CyDefSIG.sync')) {
+		if ('true' == Configure::read('MISP.sync')) {
 			// find the uuid
 			$result = $this->Attribute->findById($id);
 			$uuid = $result['Attribute']['uuid'];
@@ -779,18 +788,18 @@ class AttributesController extends AppController {
 			} else {
 				if ($this->_checkOrg() != $this->Attribute->data['Event']['orgc']) {
 					throw new MethodNotAllowedException();
-				}	
+				}
 			}
 		}
-			
+
 		// attachment will be deleted with the beforeDelete() function in the Model
 		if ($this->Attribute->delete()) {
 			// delete the attribute from remote servers
-			if ('true' == Configure::read('CyDefSIG.sync')) {
+			if ('true' == Configure::read('MISP.sync')) {
 				// find the uuid
 				$this->__deleteAttributeFromServers($uuid);
 			}
-			
+
 			// We have just deleted the attribute, let's also check if there are any shadow attributes that were attached to it and delete them
 			$this->loadModel('ShadowAttribute');
 			$this->ShadowAttribute->deleteAll(array('ShadowAttribute.old_id' => $id), false);
@@ -816,10 +825,10 @@ class AttributesController extends AppController {
 		// iterate over the servers and upload the attribute
 		if (empty($servers))
 			return;
-
-		App::uses('HttpSocket', 'Network/Http');
-		$HttpSocket = new HttpSocket();
+		App::uses('SyncTool', 'Tools');
 		foreach ($servers as &$server) {
+			$syncTool = new SyncTool();
+			$HttpSocket = $syncTool->setupHttpSocket($server);
 			$this->Attribute->deleteAttributeFromServer($uuid, $server, $HttpSocket);
 		}
 	}
@@ -868,7 +877,7 @@ class AttributesController extends AppController {
 						if ($keywordArrayElement != '%%') {
 							if ($keywordArrayElement[1] == '!') {
 								if (preg_match('@^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(\d|[1-2]\d|3[0-2]))$@', substr($saveWord, 2))) {
-									$cidrresults = $this->CIDR($saveWord);
+									$cidrresults = $this->Cidr->CIDR($saveWord);
 									foreach ($cidrresults as $result) {
 										array_push($temp2, array('Attribute.value NOT LIKE' => $result));
 									}
@@ -877,7 +886,7 @@ class AttributesController extends AppController {
 								}
 							} else {
 								if (preg_match('@^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(\d|[1-2]\d|3[0-2]))$@', $saveWord)) {
-									$cidrresults = $this->CIDR($saveWord);
+									$cidrresults = $this->Cidr->CIDR($saveWord);
 									foreach ($cidrresults as $result) {
 										array_push($temp, array('Attribute.value LIKE' => $result));
 									}
@@ -957,7 +966,8 @@ class AttributesController extends AppController {
 				$this->paginate = array(
 					'limit' => 60,
 					'maxLimit' => 9999, // LATER we will bump here on a problem once we have more than 9999 attributes?
-					'conditions' => $conditions
+					'conditions' => $conditions,
+					'contain' => array('Event.orgc', 'Event.id', 'Event.org')
 				);
 				if (!$this->_isSiteAdmin()) {
 					// merge in private conditions
@@ -1082,40 +1092,267 @@ class AttributesController extends AppController {
 
 		$this->set('fails', $this->Attribute->checkComposites());
 	}
-	
-	public function CIDR($cidr) {
-		list($address, $prefix) = explode('/', $cidr, 2);
-		$address = decbin(ip2long($address));
-		$address = substr("00000000000000000000000000000000",0,32 - strlen($address)) . $address;
-		$min = '';
-		$max = '';
-		for ($i = 0; $i < $prefix; $i++) {
-			$min .= $address[$i];
+
+	// Use the rest interface to search for attributes. Usage:
+	// MISP-base-url/attributes/restSearch/[api-key]/[value]/[type]/[category]/[orgc]
+	// value, type, category, orgc are optional
+	// the last 4 fields accept the following operators:
+	// && - you can use && between two search values to put a logical OR between them. for value, 1.1.1.1&&2.2.2.2 would find attributes with the value being either of the two.
+	// ! - you can negate a search term. For example: google.com&&!mail would search for all attributes with value google.com but not ones that include mail. www.google.com would get returned, mail.google.com wouldn't.
+	public function restSearch($key='download', $value=null, $type=null, $category=null, $org=null, $tags=null) {
+		if ($tags) $tags = str_replace(';', ':', $tags);
+		if ($value === 'null') $value = null;
+		if ($type === 'null') $type = null;
+		if ($category === 'null') $category = null;
+		if ($org === 'null') $org = null;
+		if ($key!=null && $key!='download') {
+			$user = $this->checkAuthUser($key);
+		} else {
+			if (!$this->Auth->user()) throw new UnauthorizedException('You are not authorized. Please send the Authorization header with your auth key along with an Accept header for application/xml.');
+			$user = $this->checkAuthUser($this->Auth->user('authkey'));
 		}
-		$max = $min;
-		$min = str_pad($min, 32, '0', STR_PAD_RIGHT);
-		$max = str_pad($max, 32, '1', STR_PAD_RIGHT);
-		$minArray = array();
-		$maxArray = array();
-		$searchTermLeft = '';
-		$searchTermMin = 0;
-		$searchTermMax = 0;
-		$results = array();
-		for ($i = 0; $i < 4; $i++) {
-			$minArray[] = bindec(substr($min, ($i*8), 8));
-			$maxArray[] = bindec(substr($max, ($i*8), 8));
-			if ($minArray[$i] === $maxArray[$i]) $searchTermLeft .= $minArray[$i] . '.';
-			else {
-				$searchTermMin = $minArray[$i];
-				$searchTermMax = $maxArray[$i];
-				break;
+		if (!$user) {
+			throw new UnauthorizedException('This authentication key is not authorized to be used for exports. Contact your administrator.');
+		}
+		$value = str_replace('|', '/', $value);
+		if (!isset($this->request->params['ext']) || $this->request->params['ext'] !== 'json') {
+			$this->response->type('xml');	// set the content type
+			$this->layout = 'xml/default';
+			$this->header('Content-Disposition: download; filename="misp.search.attribute.results.xml"');
+		} else {
+			$this->response->type('json');	// set the content type
+			$this->layout = 'json/default';
+			$this->header('Content-Disposition: download; filename="misp.search.attribute.results.json"');
+		}
+		$conditions['AND'] = array();
+		$subcondition = array();
+		$this->loadModel('Attribute');
+		// add the values as specified in the 2nd parameter to the conditions
+		$values = explode('&&', $value);
+		$parameters = array('value', 'type', 'category', 'org');
+		
+		foreach ($parameters as $k => $param) {
+			if (isset(${$parameters[$k]}) && ${$parameters[$k]}!=='null') {
+				$elements = explode('&&', ${$parameters[$k]});
+				foreach($elements as $v) {
+					if (substr($v, 0, 1) == '!') {
+						if ($parameters[$k] === 'value' && preg_match('@^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(\d|[1-2]\d|3[0-2]))$@', substr($v, 1))) {
+							$cidrresults = $this->Cidr->CIDR(substr($v, 1));
+							foreach ($cidrresults as $result) {
+								$subcondition['AND'][] = array('Attribute.value NOT LIKE' => $result);
+							}
+						} else {
+							if ($parameters[$k] === 'org') {
+								$subcondition['AND'][] = array('Event.' . $parameters[$k] . ' NOT LIKE' => '%'.substr($v, 1).'%');
+							} else {
+								$subcondition['AND'][] = array('Attribute.' . $parameters[$k] . ' NOT LIKE' => '%'.substr($v, 1).'%');
+							}
+						}
+					} else {
+						if ($parameters[$k] === 'value' && preg_match('@^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(\d|[1-2]\d|3[0-2]))$@', substr($v, 1))) {
+							$cidrresults = $this->Cidr->CIDR($v);
+							foreach ($cidrresults as $result) {
+								$subcondition['OR'][] = array('Attribute.value LIKE' => $result);
+							}
+						} else {
+							if ($parameters[$k] === 'org') {
+								$subcondition['OR'][] = array('Event.' . $parameters[$k] . ' LIKE' => '%'.$v.'%');
+							} else {
+								$subcondition['OR'][] = array('Attribute.' . $parameters[$k] . ' LIKE' => '%'.$v.'%');
+							}
+						}
+					}
+				}
+				array_push ($conditions['AND'], $subcondition);
+				$subcondition = array();
 			}
 		}
-		$length = $i;
-		for ($i = 0; $i < ($searchTermMax - $searchTermMin + 1); $i++) {
-			$results[$i] = $searchTermLeft . ($searchTermMin + $i);
-			if ($length < 3) $results[$i] .= '.%';
+
+		// If we are looking for an attribute, we want to retrieve some extra data about the event to be able to check for the permissions.
+
+		if (!$user['User']['siteAdmin']) {
+			$temp = array();
+			$temp['AND'] = array('Event.distribution >' => 0, 'Attribute.distribution >' => 0);
+			$subcondition['OR'][] = $temp;
+			$subcondition['OR'][] = array('Event.org' => $user['User']['org']);
+			array_push($conditions['AND'], $subcondition);
 		}
-		return $results;
+		// If we sent any tags along, load the associated tag names for each attribute
+		if ($tags) {
+			$args = $this->Attribute->dissectArgs($tags);
+			$this->loadModel('Tag');
+			$tagArray = $this->Tag->fetchEventTagIds($args[0], $args[1]);
+			$temp = array();
+			foreach ($tagArray[0] as $accepted) {
+				$temp['OR'][] = array('Event.id' => $accepted);
+			}
+			$conditions['AND'][] = $temp;
+			$temp = array();
+			foreach ($tagArray[1] as $rejected) {
+				$temp['AND'][] = array('Event.id !=' => $rejected);
+			}
+			$conditions['AND'][] = $temp;
+		}
+
+		// change the fields here for the attribute export!!!! Don't forget to check for the permissions, since you are not going through fetchevent. Maybe create fetchattribute?
+		
+		$params = array(
+				'conditions' => $conditions,
+				'fields' => array('Attribute.*', 'Event.org', 'Event.distribution'),
+				'contain' => array('Event' => array())
+		);
+		$results = $this->Attribute->find('all', $params);
+		$this->loadModel('Whitelist');
+		$results = $this->Whitelist->removeWhitelistedFromArray($results, true);
+		if (empty($results)) throw new NotFoundException('No matches.');
+		$this->set('results', $results);
+	}
+
+	// returns an XML with attributes that belong to an event. The type of attributes to be returned can be restricted by type using the 3rd parameter.
+	// Similar to the restSearch, this parameter can be chained with '&&' and negations are accepted too. For example filename&&!filename|md5 would return all filenames that don't have an md5
+	// The usage of returnAttributes is the following: [MISP-url]/attributes/returnAttributes/<API-key>/<type>/<signature flag>
+	// The signature flag is off by default, enabling it will only return attribugtes that have the to_ids flag set to true.
+	public function returnAttributes($key, $id, $type = null, $sigOnly = false) {
+		$user = $this->checkAuthUser($key);
+		// if the user is authorised to use the api key then user will be populated with the user's account
+		// in addition we also set a flag indicating whether the user is a site admin or not.
+		if (!$user) {
+			throw new UnauthorizedException('This authentication key is not authorized to be used for exports. Contact your administrator.');
+		}
+		$this->loadModel('Event');
+		$this->Event->read(null, $id);
+		$myEventOrAdmin = false;
+		if ($user['User']['siteAdmin'] || $this->Event->data['Event']['org'] == $user['User']['org']) {
+			$myEventOrAdmin = true;
+		}
+
+		if (!$myEventOrAdmin) {
+			if ($this->Event->data['Event']['distribution'] == 0) {
+				throw new UnauthorizedException('You don\'t have access to that event.');
+			}
+		}
+		$this->response->type('xml');	// set the content type
+		$this->layout = 'xml/default';
+		$this->header('Content-Disposition: download; filename="misp.search.attribute.results.xml"');
+		// check if user can see the event!
+		$conditions['AND'] = array();
+		$include = array();
+		$exclude = array();
+		$attributes = array();
+		// If there is a type set, create the include and exclude arrays from it
+		if (isset($type)) {
+			$elements = explode('&&', $type);
+			foreach($elements as $v) {
+				if (substr($v, 0, 1) == '!') {
+					$exclude[] = substr($v, 1);
+				} else {
+					$include[] = $v;
+				}
+			}
+		}
+
+		// check each attribute
+		foreach($this->Event->data['Attribute'] as $k => $attribute) {
+			$contained = false;
+			// If the include list is empty, then we just then the first check should always set contained to true (basically we chose type = all - exclusions, or simply all)
+			if (empty($include)) {
+				$contained = true;
+			} else {
+				// If we have elements in $include we should check if the attribute's type should be included
+				foreach ($include as $inc) {
+					if (strpos($attribute['type'], $inc) !== false) {
+						$contained = true;
+					}
+				}
+			}
+			// If we have either everything included or the attribute passed the include check, we should check if there is a reason to exclude the attribute
+			// For example, filename may be included, but md5 may be excluded, meaning that filename|md5 should be removed
+			if ($contained) {
+				foreach ($exclude as $exc) {
+					if (strpos($attribute['type'], $exc) !== false) {
+						$contained = false;
+						continue 2;
+					}
+				}
+			}
+			// If we still didn't throw the attribute away, let's check if the user requesting the attributes is of the owning organisation of the event
+			// and if not, whether the distribution of the attribute allows the user to see it
+			if ($contained && !$myEventOrAdmin && $attribute['distribution'] == 0) {
+				$contained = false;
+			}
+
+			// If we have set the sigOnly parameter and the attribute has to_ids set to false, discard it!
+			if ($contained && $sigOnly === 'true' && !$attribute['to_ids']) {
+				$contained = false;
+			}
+
+			// If after all of this $contained is still true, let's add the attribute to the array
+			if ($contained) $attributes[] = $attribute;
+		}
+		if (empty($attributes)) throw new NotFoundException('No matches.');
+		$this->set('results', $attributes);
+	}
+
+	public function downloadAttachment($key='download', $id) {
+		if ($key!=null && $key!='download') {
+			$user = $this->checkAuthUser($key);
+		} else {
+			if (!$this->Auth->user()) throw new UnauthorizedException('You are not authorized. Please send the Authorization header with your auth key along with an Accept header for application/xml.');
+			$user = $this->checkAuthUser($this->Auth->user('authkey'));
+		}
+		// if the user is authorised to use the api key then user will be populated with the user's account
+		// in addition we also set a flag indicating whether the user is a site admin or not.
+		if (!$user) {
+			throw new UnauthorizedException('This authentication key is not authorized to be used for exports. Contact your administrator.');
+		}
+		$this->Attribute->id = $id;
+		if(!$this->Attribute->exists()) {
+			throw new NotFoundException('Invalid attribute or no authorisation to view it.');
+		}
+		$this->Attribute->read(null, $id);
+		if (!$user['User']['siteAdmin'] &&
+			$user['User']['org'] != $this->Attribute->data['Event']['org'] &&
+			($this->Attribute->data['Event']['distribution'] == 0 ||
+				$this->Attribute->data['Attribute']['distribution'] == 0
+			)) {
+			throw new NotFoundException('Invalid attribute or no authorisation to view it.');
+		}
+		$this->__downloadAttachment($this->Attribute->data['Attribute']);
+	}
+
+	public function text($key='download', $type="", $tags='') {
+		if ($key != 'download') {
+			// check if the key is valid -> search for users based on key
+			$user = $this->checkAuthUser($key);
+			if (!$user) {
+				throw new UnauthorizedException('This authentication key is not authorized to be used for exports. Contact your administrator.');
+			}
+		} else {
+			if (!$this->Auth->user('id')) {
+				throw new UnauthorizedException('You have to be logged in to do that.');
+			}
+		}
+		$this->response->type('txt');	// set the content type
+		$this->header('Content-Disposition: download; filename="misp.' . $type . '.txt"');
+		$this->layout = 'text/default';
+		$attributes = $this->Attribute->text($this->_checkOrg(), $this->_isSiteAdmin(), $type, $tags);
+		$this->loadModel('Whitelist');
+		$attributes = $this->Whitelist->removeWhitelistedFromArray($attributes, true);
+		$this->set('attributes', $attributes);
+	}
+	
+
+	public function reportValidationIssuesAttributes() {
+		// TODO improve performance of this function by eliminating the additional SQL query per attribute
+		// search for validation problems in the attributes
+		if (!self::_isSiteAdmin()) throw new NotFoundException();
+		$this->set('result', $this->Attribute->reportValidationIssuesAttributes());
+	}
+	
+	public function generateCorrelation() {
+		if (!self::_isSiteAdmin()) throw new NotFoundException();
+		$k = $this->Attribute->generateCorrelation();
+		$this->Session->setFlash(__('All done. ' . $k . ' attributes processed.'));
+		$this->redirect(array('controller' => 'pages', 'action' => 'display', 'administration'));
 	}
 }

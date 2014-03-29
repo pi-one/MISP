@@ -21,12 +21,16 @@
 				'error' => array('escape' => false),
 				'class' => 'input-xxlarge clear'
 		));
+		echo $this->Form->input('comment', array(
+				'type' => 'text',
+				'label' => 'Contextual Comment',
+				'error' => array('escape' => false),
+				'div' => 'input clear',
+				'class' => 'input-xxlarge'
+		));
 		?>
 		<div class="input clear"></div>
 		<?php
-		echo $this->Form->input('batch_import', array(
-				'type' => 'checkbox',
-		));
 		echo $this->Form->input('to_ids', array(
 				'checked' => true,
 				'label' => 'IDS Signature?',
@@ -36,27 +40,16 @@
 		$this->Js->get('#ShadowAttributeType')->event('change', 'showFormInfo("#ShadowAttributeType")');
 	?>
 	</fieldset>
+		<p style="color:red;font-weight:bold;display:none;" id="warning-message">Warning: You are about to share data that is of a classified nature (Attribution / targeting data). Make sure that you are authorised to share this.</p>
 <?php
 	echo $this->Form->button('Propose', array('class' => 'btn btn-primary'));
 	echo $this->Form->end();
 ?>
 </div>
-<div class="actions <?php echo $debugMode;?>">
-	<ul class="nav nav-list">
-		<li><?php echo $this->Html->link('View Event', array('controller' => 'events', 'action' => 'view', $this->request->data['ShadowAttribute']['event_id'])); ?> </li>
-		<li class="active"><?php echo $this->Html->link('Propose Attribute', array('controller' => 'shadow_attributes', 'action' => 'add', $this->request->data['ShadowAttribute']['event_id']));?> </li>
-		<li><?php echo $this->Html->link('Propose Attachment', array('controller' => 'shadow_attributes', 'action' => 'add_attachment', $this->request->data['ShadowAttribute']['event_id']));?> </li>
-		<li class="divider"></li>
-		<li><?php echo $this->Html->link('Contact reporter', array('controller' => 'events', 'action' => 'contact', $this->request->data['ShadowAttribute']['event_id'])); ?> </li>
-		<li><?php echo $this->Html->link('Download as XML', array('controller' => 'events', 'action' => 'xml', 'download', $this->request->data['ShadowAttribute']['event_id'])); ?></li>
-		<li><?php echo $this->Html->link('Download as IOC', array('controller' => 'events', 'action' => 'downloadOpenIOCEvent', $this->request->data['ShadowAttribute']['event_id'])); ?> </li>
-		<li class="divider"></li>
-		<li><?php echo $this->Html->link('List Events', array('controller' => 'events', 'action' => 'index')); ?></li>
-		<?php if ($isAclAdd): ?>
-		<li><?php echo $this->Html->link('Add Event', array('controller' => 'events', 'action' => 'add')); ?></li>
-		<?php endif; ?>
-	</ul>
-</div>
+<?php 
+	$event['Event']['id'] = $this->request->data['ShadowAttribute']['event_id'];
+	echo $this->element('side_menu', array('menuList' => 'event', 'menuItem' => 'proposeAttribute', 'event' => $event));
+?>
 
 <script type="text/javascript">
 //
@@ -77,7 +70,6 @@ foreach ($categoryDefinitions as $category => $def) {
 ?>
 
 function formCategoryChanged(id) {
-  showFormInfo(id); // display the tooltip
   // fill in the types
   var options = $('#ShadowAttributeType').prop('options');
   $('option', $('#ShadowAttributeType')).remove();
@@ -89,10 +81,6 @@ function formCategoryChanged(id) {
 }
 
 $(document).ready(function() {
-
-	$("#ShadowAttributeType, #ShadowAttributeCategory, #ShadowAttribute").on('mouseleave', function(e) {
-	    $('#'+e.currentTarget.id).popover('destroy');
-	});
 
 	$("#ShadowAttributeType, #ShadowAttributeCategory, #ShadowAttribute").on('mouseover', function(e) {
 	    var $e = $(e.target);
@@ -114,7 +102,7 @@ $(document).ready(function() {
 		var $e = $(e.target);
 		$('#'+e.currentTarget.id).popover('destroy');
         $('#'+e.currentTarget.id).popover({
-            trigger: 'manual',
+            trigger: 'focus',
             placement: 'right',
         }).popover('show');
 	});
@@ -123,15 +111,22 @@ $(document).ready(function() {
 	// disadvangate is that user needs to click on the item to see the tooltip.
 	// no solutions exist, except to generate the select completely using html.
 	$("#ShadowAttributeType, #ShadowAttributeCategory, #ShadowAttribute").on('change', function(e) {
+		if (this.id === "ShadowAttributeCategory") {
+			var select = document.getElementById("ShadowAttributeCategory");
+			if (select.value === 'Attribution' || select.value === 'Targeting data') {
+				$("#warning-message").show();
+			} else {
+				$("#warning-message").hide();
+			}
+		}
 	    var $e = $(e.target);
         $('#'+e.currentTarget.id).popover('destroy');
         $('#'+e.currentTarget.id).popover({
-            trigger: 'manual',
+            trigger: 'focus',
             placement: 'right',
             content: formInfoValues[$e.val()],
         }).popover('show');
 	});
-
 });
 
 //

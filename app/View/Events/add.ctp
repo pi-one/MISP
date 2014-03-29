@@ -11,22 +11,25 @@
 		if (Configure::read('MISP.default_event_distribution') != null) {
 			$initialDistribution = Configure::read('MISP.default_event_distribution');
 		}
-		if ('true' == Configure::read('CyDefSIG.sync')) {
+		if ('true' == Configure::read('MISP.sync')) {
 			echo $this->Form->input('distribution', array(
 					'options' => array($distributionLevels),
 					'label' => 'Distribution',
 					'selected' => $initialDistribution,
 					));
 		}
-		echo $this->Form->input('risk', array(
+		echo $this->Form->input('threat_level_id', array(
 				'div' => 'input clear'
 				));
 		echo $this->Form->input('analysis', array(
 				'options' => array($analysisLevels),
 				));
 		echo $this->Form->input('info', array(
-				'div' => 'clear',
-				'class' => 'input-xxlarge'
+					'label' => 'Event Description',
+					'div' => 'clear',
+					'type' => 'text',
+					'class' => 'form-control span6',
+					'placeholder' => 'Quick Event Description or Tracking Info'
 				));
 		echo $this->Form->input('Event.submittedgfi', array(
 				'label' => '<b>GFI sandbox</b>',
@@ -46,22 +49,9 @@ echo $this->Form->end();
 ?>
 </div>
 
-<div class="actions <?php echo $debugMode;?>">
-	<ul class="nav nav-list">
-		<li><a href="/events/index">List Events</a></li>
-		<?php if ($isAclAdd): ?>
-		<li class="active"><a href="/events/add">Add Event</a></li>
-		<?php endif; ?>
-		<li class="divider"></li>
-		<li><a href="/attributes/index">List Attributes</a></li>
-		<li><a href="/attributes/search">Search Attributes</a></li>
-		<li class="divider"></li>
-		<li><a href="/events/export">Export</a></li>
-		<?php if ($isAclAuth): ?>
-		<li><a href="/events/automation">Automation</a></li>
-		<?php endif;?>
-	</ul>
-</div>
+<?php
+	echo $this->element('side_menu', array('menuList' => 'event-collection', 'menuItem' => 'add'));
+?>
 
 <script type="text/javascript">
 //
@@ -69,7 +59,7 @@ echo $this->Form->end();
 //
 var formInfoValues = {
 		'EventDistribution' : new Array(),
-		'EventRisk' : new Array(),
+		'EventThreatLevelId' : new Array(),
 		'EventAnalysis' : new Array()
 };
 
@@ -79,8 +69,7 @@ foreach ($distributionDescriptions as $type => $def) {
 	echo "formInfoValues['EventDistribution']['" . addslashes($type) . "'] = \"" . addslashes($info) . "\";\n";	// as we output JS code we need to add slashes
 }
 foreach ($riskDescriptions as $type => $def) {
-	$info = isset($def['formdesc']) ? $def['formdesc'] : $def['desc'];
-	echo "formInfoValues['EventRisk']['" . addslashes($type) . "'] = \"" . addslashes($info) . "\";\n";	// as we output JS code we need to add slashes
+	echo "formInfoValues['EventThreatLevelId']['" . addslashes($type) . "'] = \"" . addslashes($def) . "\";\n";	// as we output JS code we need to add slashes
 }
 foreach ($analysisDescriptions as $type => $def) {
 	$info = isset($def['formdesc']) ? $def['formdesc'] : $def['desc'];
@@ -90,11 +79,7 @@ foreach ($analysisDescriptions as $type => $def) {
 
 $(document).ready(function() {
 
-	$("#EventAnalysis, #EventRisk, #EventDistribution").on('mouseleave', function(e) {
-	    $('#'+e.currentTarget.id).popover('destroy');
-	});
-
-	$("#EventAnalysis, #EventRisk, #EventDistribution").on('mouseover', function(e) {
+	$("#EventAnalysis, #EventThreatLevelId, #EventDistribution").on('mouseover', function(e) {
 	    var $e = $(e.target);
 	    if ($e.is('option')) {
 	        $('#'+e.currentTarget.id).popover('destroy');
@@ -109,7 +94,7 @@ $(document).ready(function() {
 	// workaround for browsers like IE and Chrome that do now have an onmouseover on the 'options' of a select.
 	// disadvangate is that user needs to click on the item to see the tooltip.
 	// no solutions exist, except to generate the select completely using html.
-	$("#EventAnalysis, #EventRisk, #EventDistribution").on('change', function(e) {
+	$("#EventAnalysis, #EventThreatLevelId, #EventDistribution").on('change', function(e) {
 		var $e = $(e.target);
         $('#'+e.currentTarget.id).popover('destroy');
         $('#'+e.currentTarget.id).popover({

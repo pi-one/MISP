@@ -42,15 +42,16 @@ class Attribute extends AppModel {
 	public $virtualFields = array(
 			'value' => 'IF (Attribute.value2="", Attribute.value1, CONCAT(Attribute.value1, "|", Attribute.value2))',
 			'category_order' => 'IF (Attribute.category="Internal reference", "a",
-			IF (Attribute.category="Antivirus detection", "b",
-			IF (Attribute.category="Payload delivery", "c",
-			IF (Attribute.category="Payload installation", "d",
-			IF (Attribute.category="Artifacts dropped", "e",
-			IF (Attribute.category="Persistence mechanism", "f",
-			IF (Attribute.category="Network activity", "g",
-			IF (Attribute.category="Payload type", "h",
-			IF (Attribute.category="Attribution", "i",
-			IF (Attribute.category="External analysis", "j", "k"))))))))))'
+			IF (Attribute.category="Targeting data", "b",
+ 			IF (Attribute.category="Antivirus detection", "c",
+ 			IF (Attribute.category="Payload delivery", "d",
+ 			IF (Attribute.category="Payload installation", "e",
+ 			IF (Attribute.category="Artifacts dropped", "f",
+ 			IF (Attribute.category="Persistence mechanism", "g",
+ 			IF (Attribute.category="Network activity", "h",
+ 			IF (Attribute.category="Payload type", "i",
+ 			IF (Attribute.category="Attribution", "j",
+ 			IF (Attribute.category="External analysis", "k", "l")))))))))))'
 	); // TODO hardcoded
 
 /**
@@ -126,6 +127,12 @@ class Attribute extends AppModel {
 			'other' => array('desc' => 'Other attribute'),
 			'named pipe' => array('desc' => 'Named pipe, use the format \\.\pipe\<PipeName>'),
 			'mutex' => array('desc' => 'Mutex, use the format \BaseNamedObjects\<Mutex>'),
+ 			'target-user' => array('desc' => 'Attack Targets Username(s)'),
+ 			'target-email' => array('desc' => 'Attack Targets Email(s)'),
+ 			'target-machine' => array('desc' => 'Attack Targets Machine Name(s)'),
+ 			'target-org' => array('desc' => 'Attack Targets Department or Orginization(s)'),
+ 			'target-location' => array('desc' => 'Attack Targets Physical Location(s)'),
+ 			'target-external' => array('desc' => 'External Target Orginizations Affected by this Attack'),
 	);
 
 	// definitions of categories
@@ -134,9 +141,14 @@ class Attribute extends AppModel {
 					'desc' => 'Reference used by the publishing party (e.g. ticket number)',
 					'types' => array('link', 'comment', 'text', 'other')
 					),
+ 			'Targeting data' => array(
+ 					'desc' => 'Internal Attack Targeting and Compromise Information',
+ 					'formdesc' => 'Targeting information to include recipient email, infected machines, department, and or locations.<br/>',
+ 					'types' => array('target-user', 'target-email', 'target-machine', 'target-org', 'target-location', 'target-external', 'comment')
+ 					),
 			'Antivirus detection' => array(
 					'desc' => 'All the info about how the malware is detected by the antivirus products',
-					'formdesc' => 'List of anti-virus vendors detecting the malware or information on detection performance (e.g. 13/43 or 67%).<br/>Attachment with list of detection or link to VirusTotal could be placed here as well.',
+					'formdesc' => 'List of anti-virus vendors detecting the malware or information on detection performance (e.g. 13/43 or 67%). Attachment with list of detection or link to VirusTotal could be placed here as well.',
 					'types' => array('link', 'comment', 'text', 'attachment', 'other')
 					),
 			'Payload delivery' => array(
@@ -150,12 +162,12 @@ class Attribute extends AppModel {
 					),
 			'Payload installation' => array(
 					'desc' => 'Info on where the malware gets installed in the system',
-					'formdesc' => 'Location where the payload was placed in the system and the way it was installed.<br/>For example, a filename|md5 type attribute can be added here like this:<br/>c:\\windows\\system32\\malicious.exe|41d8cd98f00b204e9800998ecf8427e.',
+					'formdesc' => 'Location where the payload was placed in the system and the way it was installed. For example, a filename|md5 type attribute can be added here like this: c:\\windows\\system32\\malicious.exe|41d8cd98f00b204e9800998ecf8427e.',
 					'types' => array('md5', 'sha1', 'sha256', 'filename', 'filename|md5', 'filename|sha1', 'filename|sha256', 'pattern-in-file', 'pattern-in-traffic', 'pattern-in-memory', 'yara', 'vulnerability', 'attachment', 'malware-sample', 'comment', 'text', 'other')
 					),
 			'Persistence mechanism' => array(
 					'desc' => 'Mechanisms used by the malware to start at boot',
-					'formdesc' => 'Mechanisms used by the malware to start at boot.<br/>This could be a registry key, legitimate driver modification, LNK file in startup',
+					'formdesc' => 'Mechanisms used by the malware to start at boot. This could be a registry key, legitimate driver modification, LNK file in startup',
 					'types' => array('filename', 'regkey', 'regkey|value', 'comment', 'text', 'other')
 					),
 			'Network activity' => array(
@@ -164,7 +176,7 @@ class Attribute extends AppModel {
 					),
 			'Payload type' => array(
 					'desc' => 'Information about the final payload(s)',
-					'formdesc' => 'Information about the final payload(s).<br/>Can contain a function of the payload, e.g. keylogger, RAT, or a name if identified, such as Poison Ivy.',
+					'formdesc' => 'Information about the final payload(s). Can contain a function of the payload, e.g. keylogger, RAT, or a name if identified, such as Poison Ivy.',
 					'types' => array('comment', 'text', 'other')
 					),
 			'Attribution' => array(
@@ -173,7 +185,7 @@ class Attribute extends AppModel {
 					),
 			'External analysis' => array(
 					'desc' => 'Any other result from additional analysis of the malware like tools output',
-					'formdesc' => 'Any other result from additional analysis of the malware like tools output<br/>Examples: pdf-parser output, automated sandbox analysis, reverse engineering report.',
+					'formdesc' => 'Any other result from additional analysis of the malware like tools output Examples: pdf-parser output, automated sandbox analysis, reverse engineering report.',
 					'types' => array('md5', 'sha1', 'sha256','filename', 'filename|md5', 'filename|sha1', 'filename|sha256', 'ip-src', 'ip-dst', 'hostname', 'domain', 'url', 'user-agent', 'regkey', 'regkey|value', 'AS', 'snort', 'pattern-in-file', 'pattern-in-traffic', 'pattern-in-memory', 'vulnerability', 'attachment', 'malware-sample', 'link', 'comment', 'text', 'other')
 					),
 			'Other' => array(
@@ -214,6 +226,7 @@ class Attribute extends AppModel {
 		'category' => array(
 			'rule' => array('inList', array(
 							'Internal reference',
+							'Targeting data',
 							'Antivirus detection',
 							'Payload delivery',
 							'Payload installation',
@@ -643,14 +656,14 @@ class Attribute extends AppModel {
 				}
 				break;
 			case 'vulnerability':
-				if (preg_match("#^(CVE-)[0-9]{4}(-)[0-9]{4}$#", $value)) {
+				if (preg_match("#^(CVE-)[0-9]{4}(-)[0-9]{4,6}$#", $value)) {
 					$returnValue = true;
 				} else {
 					$returnValue = 'Invalid format. Expected: CVE-xxxx-xxxx.';
 				}
 				break;
 			case 'named pipe':
-				if (preg_match('#^(\\\\\\\\.\\\\pipe\\\\)#', $value) && !preg_match("#\n#", $value)) {
+				if (!preg_match("#\n#", $value)) {
 					$returnValue = true;
 				}
 				break;
@@ -675,6 +688,42 @@ class Attribute extends AppModel {
 			case 'other':
 				$returnValue = true;
 				break;
+ 			case 'target-user':
+ 				// no newline
+ 				if (!preg_match("#\n#", $value)) {
+ 					$returnValue = true;
+ 				}
+ 				break;
+ 			case 'target-email':
+ 				if (preg_match("#^[A-Z0-9._%+-]*@[A-Z0-9.-]+\.[A-Z]{2,4}$#i", $value)) {
+ 					$returnValue = true;
+ 				} else {
+ 					$returnValue = 'Email address has invalid format. Please double check the value or select "other" for a type.';
+ 				}
+ 				break;
+ 			case 'target-machine':
+ 				// no newline
+ 				if (!preg_match("#\n#", $value)) {
+ 					$returnValue = true;
+ 				}
+ 				break;
+ 			case 'target-org':
+ 				// no newline
+ 				if (!preg_match("#\n#", $value)) {
+ 					$returnValue = true;
+ 				}
+ 				break;
+ 			case 'target-location':
+ 				// no newline
+ 				if (!preg_match("#\n#", $value)) {
+ 					$returnValue = true;
+ 				}
+ 				break;
+ 			case 'target-external':
+ 				// no newline
+ 				if (!preg_match("#\n#", $value)) {
+ 					$returnValue = true;
+ 				}
 		}
 		return $returnValue;
 	}
@@ -795,7 +844,7 @@ class Attribute extends AppModel {
  *
  * @return void
  */
-	public function uploadAttachment($fileP, $realFileName, $malware, $eventId = null, $category = null, $extraPath = '', $fullFileName = '', $dist) {
+	public function uploadAttachment($fileP, $realFileName, $malware, $eventId = null, $category = null, $extraPath = '', $fullFileName = '', $dist, $fromGFI = false) {
 		// Check if there were problems with the file upload
 		// only keep the last part of the filename, this should prevent directory attacks
 		$filename = basename($fileP);
@@ -810,24 +859,29 @@ class Attribute extends AppModel {
 			$this->data['Attribute']['category'] = $category ? $category : "Payload delivery";
 			$this->data['Attribute']['type'] = "malware-sample";
 			$this->data['Attribute']['value'] = $fullFileName ? $fullFileName . '|' . $md5 : $filename . '|' . $md5; // TODO gives problems with bigger files
-			$this->data['Attribute']['to_ids'] = 0; // LATER let user choose to send this to IDS
+			$this->data['Attribute']['to_ids'] = 1; // LATER let user choose to send this to IDS
+			if ($fromGFI)$this->data['Attribute']['comment'] = 'GFI import';
 		} else {
 			$this->data['Attribute']['category'] = $category ? $category : "Artifacts dropped";
 			$this->data['Attribute']['type'] = "attachment";
 			$this->data['Attribute']['value'] = $fullFileName ? $fullFileName : $realFileName;
 			$this->data['Attribute']['to_ids'] = 0;
+			if ($fromGFI)$this->data['Attribute']['comment'] = 'GFI import';
 		}
 
+		//???
 		if ($this->save($this->data)) {
 			// attribute saved correctly in the db
 		} else {
-			return;
+			// do some?
 		}
 
 		// no errors in file upload, entry already in db, now move the file where needed and zip it if required.
 		// no sanitization is required on the filename, path or type as we save
 		// create directory structure
+		// ???
 		$rootDir = APP . "files" . DS . $eventId;
+		
 		$dir = new Folder($rootDir, true);
 		// move the file to the correct location
 		$destpath = $rootDir . DS . $this->getId(); // id of the new attribute in the database
@@ -874,11 +928,11 @@ class Attribute extends AppModel {
 			$this->Correlation = ClassRegistry::init('Correlation');
 			// When we add/update an attribute we need to
 			// - (beforeSave) (update-only) clean up the relation of the old value: remove the existing relations related to that attribute, we DO have a reference, the id
-	
+
 			// - remove the existing relations for that value1 or value2, we do NOT have an id reference, but we have a value1/value2 field to search for
 			// ==> DELETE FROM correlations WHERE value = $value1 OR value = $value2 */
 			$dummy = $this->Correlation->deleteAll(array('Correlation.value' => array($a['value1'], $a['value2'])));
-	
+
 			// now build a correlation array of things that will need to be added in the db
 			// we do this twice, once for value1 and once for value2
 			$correlations = array();   // init variable
@@ -894,7 +948,7 @@ class Attribute extends AppModel {
 			            	),
 			            	'AND' => array(
 			            		'Attribute.type !=' => 'vulnerability',
-			            		'Attribute.type !=' => 'comment',			            				
+			            		'Attribute.type !=' => 'comment',
 						)),
 			            'recursive' => 0,
 			            //'fields' => '', // we want to have the Attribute AND Event, so do not filter here
@@ -967,8 +1021,9 @@ class Attribute extends AppModel {
 		$url = $server['Server']['url'];
 		$authkey = $server['Server']['authkey'];
 		if (null == $HttpSocket) {
-			App::uses('HttpSocket', 'Network/Http');
-			$HttpSocket = new HttpSocket();
+			App::uses('SyncTool', 'Tools');
+			$syncTool = new SyncTool();
+			$HttpSocket = $syncTool->setupHttpSocket($server);
 		}
 		$request = array(
 				'header' => array(
@@ -1042,8 +1097,9 @@ class Attribute extends AppModel {
 		$url = $server['Server']['url'];
 		$authkey = $server['Server']['authkey'];
 		if (null == $HttpSocket) {
-			App::uses('HttpSocket', 'Network/Http');
-			$HttpSocket = new HttpSocket();
+			App::uses('SyncTool', 'Tools');
+			$syncTool = new SyncTool();
+			$HttpSocket = $syncTool->setupHttpSocket($server);
 		}
 		$request = array(
 				'header' => array(
@@ -1077,4 +1133,201 @@ class Attribute extends AppModel {
 		}
 		return $fails;
 	}
+	
+	public function hids($isSiteAdmin, $org ,$type, $tags = '') {
+		// check if it's a valid type
+		if ($type != 'md5' && $type != 'sha1') {
+			throw new UnauthorizedException('Invalid hash type.');
+		}
+		//restricting to non-private or same org if the user is not a site-admin.
+		$conditions['AND'] = array('Attribute.to_ids' => 1, 'Event.published' => 1, 'Attribute.type' => $type);
+		if (!$isSiteAdmin) {
+			$temp = array();
+			$distribution = array();
+			array_push($temp, array('Attribute.distribution >' => 0));
+			array_push($temp, array('(SELECT events.org FROM events WHERE events.id = Attribute.event_id) LIKE' => $org));
+			$conditions['OR'] = $temp;
+		}
+		
+		// If we sent any tags along, load the associated tag names for each attribute
+		if ($tags !== '') {
+			$tag = ClassRegistry::init('Tag');
+			$args = $this->dissectArgs($tags);
+			$tagArray = $tag->fetchEventTagIds($args[0], $args[1]);
+			$temp = array();
+			foreach ($tagArray[0] as $accepted) {
+				$temp['OR'][] = array('Event.id' => $accepted);
+			}
+			$conditions['AND'][] = $temp;
+			$temp = array();
+			foreach ($tagArray[1] as $rejected) {
+				$temp['AND'][] = array('Event.id !=' => $rejected);
+			}
+			$conditions['AND'][] = $temp;
+		}
+		
+		$params = array(
+				'conditions' => $conditions, //array of conditions
+				'recursive' => 0, //int
+				'group' => array('Attribute.type', 'Attribute.value1'), //fields to GROUP BY
+		);
+		$items = $this->find('all', $params);
+		App::uses('HidsExport', 'Export');
+		$export = new HidsExport();
+		$rules = $export->export($items, strtoupper($type));
+		return $rules;
+	}
+	
+	public function nids($isSiteAdmin, $org, $format, $sid, $id = null, $continue = false, $tags = '') {
+		//restricting to non-private or same org if the user is not a site-admin.
+		$conditions['AND'] = array('Attribute.to_ids' => 1, "Event.published" => 1);
+		if (!$isSiteAdmin) {
+			$temp = array();
+			$distribution = array();
+			array_push($temp, array('Attribute.distribution >' => 0));
+			array_push($temp, array('(SELECT events.org FROM events WHERE events.id = Attribute.event_id) LIKE' => $org));
+			$conditions['OR'] = $temp;
+		}
+		
+		if ($id) {
+			array_push($conditions['AND'], array('Event.id' => $id));
+		}
+		// If we sent any tags along, load the associated tag names for each attribute
+		if ($tags !== '') {
+			$tag = ClassRegistry::init('Tag');
+			$args = $this->dissectArgs($tags);
+			$tagArray = $tag->fetchEventTagIds($args[0], $args[1]);
+			$temp = array();
+			foreach ($tagArray[0] as $accepted) {
+				$temp['OR'][] = array('Event.id' => $accepted);
+			}
+			$conditions['AND'][] = $temp;
+			$temp = array();
+			foreach ($tagArray[1] as $rejected) {
+				$temp['AND'][] = array('Event.id !=' => $rejected);
+			}
+			$conditions['AND'][] = $temp;
+		}
+		
+		$params = array(
+				'conditions' => $conditions, //array of conditions
+				'recursive' => 0, //int
+				'group' => array('Attribute.type', 'Attribute.value1'), //fields to GROUP BY
+		);
+		unset($this->virtualFields['category_order']);  // not needed for IDS export and speeds things up
+		$items = $this->find('all', $params);
+		
+		// export depending of the requested type
+		switch ($format) {
+			case 'suricata':
+-				App::uses('NidsSuricataExport', 'Export');
+				$export = new NidsSuricataExport();
+				break;
+			case 'snort':
+				App::uses('NidsSnortExport', 'Export');
+				$export = new NidsSnortExport();
+				break;
+		}
+		$rules = $export->export($items, $sid, $format, $continue);
+		return $rules;
+	}
+
+	 public function text($org, $isSiteAdmin, $type, $tags = '') {
+	 	//restricting to non-private or same org if the user is not a site-admin.
+	 	$conditions['AND'] = array('Attribute.type' => $type, 'Attribute.to_ids =' => 1, 'Event.published =' => 1);
+	 	if (!$isSiteAdmin) {
+	 		$temp = array();
+	 		$distribution = array();
+	 		array_push($temp, array('Attribute.distribution >' => 0));
+	 		array_push($temp, array('(SELECT events.org FROM events WHERE events.id = Attribute.event_id) LIKE' => $org));
+	 		$conditions['OR'] = $temp;
+	 	}
+	 	
+	 	// If we sent any tags along, load the associated tag names for each attribute
+	 	if ($tags !== '') {
+	 		$tag = ClassRegistry::init('Tag');
+	 		$args = $this->dissectArgs($tags);
+	 		$tagArray = $tag->fetchEventTagIds($args[0], $args[1]);
+	 		$temp = array();
+	 		foreach ($tagArray[0] as $accepted) {
+	 			$temp['OR'][] = array('Event.id' => $accepted);
+	 		}
+	 		$conditions['AND'][] = $temp;
+	 		$temp = array();
+	 		foreach ($tagArray[1] as $rejected) {
+	 			$temp['AND'][] = array('Event.id !=' => $rejected);
+	 		}
+	 		$conditions['AND'][] = $temp;
+	 	}
+	 	
+	 	$params = array(
+	 			'conditions' => $conditions, //array of conditions
+	 			//'recursive' => 2, //int
+	 			//'fields' => array('Attribute.value'), //array of field names
+	 			'order' => array('Attribute.value'), //string or array defining order
+	 			'group' => array('Attribute.value'), //fields to GROUP BY
+	 			'contain' => array('Event' => array(
+	 					'fields' => array('Event.id', 'Event.published'),
+	 	
+	 			)));
+	 	
+	 	$attributes = $this->find('all', $params);
+	 	return $attributes;
+	 }
+	 
+	 public function generateCorrelation() {
+	 	$this->Correlation = ClassRegistry::init('Correlation');
+	 	$this->Correlation->deleteAll(array('id !=' => ''), false);
+	 	$fields = array('Attribute.id', 'Attribute.event_id', 'Attribute.distribution', 'Attribute.type', 'Attribute.category', 'Attribute.value1', 'Attribute.value2');
+	 	// get all attributes..
+	 	$attributes = $this->find('all', array('recursive' => -1, 'fields' => $fields));
+	 	// for all attributes..
+	 	foreach ($attributes as $k => $attribute) {
+	 		$this->__afterSaveCorrelation($attribute['Attribute']);
+	 	}
+	 	return $k;
+	 }
+	 
+	 public function reportValidationIssuesAttributes() {
+	 	// for efficiency reasons remove the unique requirement
+	 	$this->validator()->remove('value', 'unique');
+	 
+	 	// get all attributes..
+	 	$attributes = $this->find('all', array('recursive' => -1));
+	 	// for all attributes..
+	 	$result = array();
+	 	$i = 0;
+	 	foreach ($attributes as $attribute) {
+	 		$this->set($attribute);
+	 		if ($this->validates()) {
+	 			// validates
+	 		} else {
+	 			$errors = $this->validationErrors;
+	 			$result[$i]['id'] = $attribute['Attribute']['id'];
+	 			// print_r
+	 			$result[$i]['error'] = $errors['value'][0];
+	 			$result[$i]['details'] = 'Event ID: [' . $attribute['Attribute']['event_id'] . "] - Category: [" . $attribute['Attribute']['category'] . "] - Type: [" . $attribute['Attribute']['type'] . "] - Value: [" . $attribute['Attribute']['value'] . ']';
+	 			$i++;
+	 		}
+	 	}
+	 	return $result;
+	 }
+	 
+	 // This method takes a string from an argument with several elements (separated by '&&' and negated by '!') and returns 2 arrays
+	 // array 1 will have all of the non negated terms and array 2 all the negated terms
+	 public function dissectArgs($args) {
+	 	$argArray = explode('&&', $args);
+	 	$accept = $reject = $result = array();
+	 	$reject = array();
+	 	foreach ($argArray as $arg) {
+	 		if (substr($arg, 0, 1) == '!') {
+	 			$reject[] = substr($arg, 1);
+	 		} else {
+	 			$accept[] = $arg;
+	 		}
+	 	}
+	 	$result[0] = $accept;
+	 	$result[1] = $reject;
+	 	return $result;
+	 }
 }

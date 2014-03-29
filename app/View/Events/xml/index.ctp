@@ -10,7 +10,7 @@ foreach ($events as $key => $event) {
 	// cleanup the array from things we do not want to expose
 	unset($events[$key]['user_id']);
 	// hide the org field is we are not in showorg mode
-	if ('true' != Configure::read('CyDefSIG.showorg') && !$isAdmin) {
+	if ('true' != Configure::read('MISP.showorg') && !$isAdmin) {
 		unset($events[$key]['org']);
 		unset($events[$key]['orgc']);
 		unset($events[$key]['from']);
@@ -20,6 +20,7 @@ foreach ($events as $key => $event) {
 
 // display the XML to the user
 $xmlArray['response']['Event'] = $events;
+$xmlArray['response']['xml_version'] = $mispVersion;
 $xmlObject = Xml::fromArray($xmlArray, array('format' => 'tags'));
 echo $xmlObject->asXML();
 ?><!--
@@ -32,3 +33,4 @@ You can for example ask: /events/index/limit:999.xml to get the 999 first record
 
 To export all the events at once, with their attributes, use the export functionality.
  -->
+ 

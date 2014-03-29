@@ -10,7 +10,7 @@
 		echo $this->Form->input('type', array(
 				'empty' => '(first choose category)'
 				));
-		if ('true' == Configure::read('CyDefSIG.sync')) {
+		if ('true' == Configure::read('MISP.sync')) {
 			$initialDistribution = 3;
 			if (Configure::read('MISP.default_attribute_distribution') != null) {
 				if (Configure::read('MISP.default_attribute_distribution') === 'event') {
@@ -31,6 +31,13 @@
 				'div' => 'input clear',
 				'class' => 'input-xxlarge'
 		));
+		echo $this->Form->input('comment', array(
+				'type' => 'text',
+				'label' => 'Contextual Comment',
+				'error' => array('escape' => false),
+				'div' => 'input clear',
+				'class' => 'input-xxlarge'
+		));
 		?>
 		<div class="input clear"></div>
 		<?php
@@ -43,41 +50,21 @@
 				'type' => 'checkbox',
 				'data-content' => 'Create multiple attributes one per line',
 		));
-
 		// link an onchange event to the form elements
 		$this->Js->get('#AttributeCategory')->event('change', 'formCategoryChanged("#AttributeCategory")');
 		?>
 	</fieldset>
+	<p style="color:red;font-weight:bold;display:none;" id="warning-message">Warning: You are about to share data that is of a classified nature (Attribution / targeting data). Make sure that you are authorised to share this.</p>
 <?php
 echo $this->Form->button('Submit', array('class' => 'btn btn-primary'));
 echo $this->Form->end();
 ?>
 </div>
-<div class="actions <?php echo $debugMode;?>">
-	<ul class="nav nav-list">
-		<li><a href="/events/view/<?php echo $this->request->data['Attribute']['event_id']; ?>">View Event</a></li>
-		<li><a href="/logs/event_index/<?php echo $this->request->data['Attribute']['event_id'];?>">View Event History</a></li>
-		<li><a href="/events/edit/<?php echo $this->request->data['Attribute']['event_id']; ?>">Edit Event</a></li>
-		<li><?php echo $this->Form->postLink('Delete Event', array('controller' => 'events', 'action' => 'delete', $this->request->data['Attribute']['event_id']), null, __('Are you sure you want to delete # %s?', $this->request->data['Attribute']['event_id'])); ?></li>
-		<li class="divider"></li>
-		<li class="active"><a href="/attributes/add/<?php echo $this->request->data['Attribute']['event_id']; ?>">Add Attribute</a></li>
-		<li><a href="/attributes/add_attachment/<?php echo $this->request->data['Attribute']['event_id']; ?>">Add Attachment</a></li>
-		<li><a href="/events/addIOC/<?php echo $this->request->data['Attribute']['event_id']; ?>">Populate from IOC</a></li>
-		<li><a href="/attributes/add_threatconnect/<?php echo $this->request->data['Attribute']['event_id']; ?>">Populate from ThreatConnect</a></li>
-		<li class="divider"></li>
-		<li><a href="/events/contact/<?php echo $this->request->data['Attribute']['event_id']; ?>">Contact Reporter</a></li>
-		<li><a href="/events/xml/download/<?php echo $this->request->data['Attribute']['event_id']; ?>">Download as XML</a></li>
-		<?php if ($published): ?>
-		<li><a href="/events/downloadOpenIOCEvent/<?php echo $this->request->data['Attribute']['event_id'];?>">Download as IOC</a></li>
-		<li><a href="/events/csv/download/<?php echo $this->request->data['Attribute']['event_id'];?>">Download as CSV</a></li>
-		<?php endif; ?>
-		<li class="divider"></li>
-		<li><a href="/events/index">List Events</a></li>
-		<?php if ($isAclAdd): ?>
-		<li><a href="/events/add">Add Event</a></li>
-		<?php endif; ?>
-	</ul>
-</div>
+<?php 
+	$event['Event']['id'] = $this->request->data['Attribute']['event_id'];
+	$event['Event']['published'] = $published;
+	echo $this->element('side_menu', array('menuList' => 'event', 'menuItem' => 'addAttribute', 'event' => $event));
+?>
 
 <script type="text/javascript">
 //
@@ -130,11 +117,6 @@ foreach ($distributionDescriptions as $type => $def) {
 
 $(document).ready(function() {
 
-	$("#AttributeType, #AttributeCategory, #Attribute, #AttributeDistribution").on('mouseleave', function(e) {
-	    $('#'+e.currentTarget.id).popover('destroy');
-	});
-
-
 	$("#AttributeType, #AttributeCategory, #Attribute, #AttributeDistribution").on('mouseover', function(e) {
 	    var $e = $(e.target);
 	    if ($e.is('option')) {
@@ -167,6 +149,14 @@ $(document).ready(function() {
 	// disadvangate is that user needs to click on the item to see the tooltip.
 	// no solutions exist, except to generate the select completely using html.
 	$("#AttributeType, #AttributeCategory, #Attribute, #AttributeDistribution").on('change', function(e) {
+		if (this.id === "AttributeCategory") {
+			var select = document.getElementById("AttributeCategory");
+			if (select.value === 'Attribution' || select.value === 'Targeting data') {
+				$("#warning-message").show();
+			} else {
+				$("#warning-message").hide();
+			}
+		}
 	    var $e = $(e.target);
         $('#'+e.currentTarget.id).popover('destroy');
         $('#'+e.currentTarget.id).popover({
@@ -175,10 +165,6 @@ $(document).ready(function() {
             content: formInfoValues[$e.val()],
         }).popover('show');
 	});
-
 });
-
-
-
 </script>
 <?php echo $this->Js->writeBuffer(); // Write cached scripts
