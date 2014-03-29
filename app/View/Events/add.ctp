@@ -33,6 +33,11 @@
 				'type' => 'file',
 				'div' => 'clear'
 				));
+		echo $this->Form->input('Event.submittedcuckoo', array(
+				'label' => '<b>Cuckoo sandbox</b>',
+				'type' => 'file',
+				'div' => 'clear'
+				));
 		?>
 	</fieldset>
 <?php

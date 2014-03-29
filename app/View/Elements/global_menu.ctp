@@ -123,10 +123,7 @@
 
 			<div class="nav-collapse collapse pull-right" style="margin-top:10px">
 				<div class="nav" style="font-weight:bold">
-					<span class="logoBlue">M</span><span class="logoGray">alware</span>
-					<span class="logoBlue">I</span><span class="logoGray">nformation </span>
-					<span class="logoBlue">S</span><span class="logoGray">haring</span>
-					<span class="logoBlue">P</span><span class="logoGray">latform</span>
+					<span class="logoBlue">MWAnalysis - Malware Analysis Platform @ <a href="http://www1.informatik.uni-erlangen.de">FAU</a></span>
 				</div>
 			</div>
 		<?php endif;?>

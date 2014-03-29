@@ -834,12 +834,13 @@ class Attribute extends AppModel {
 		$file = new File ($destpath);
 		$zipfile = new File ($destpath . '.zip');
 		$fileInZip = new File($rootDir . DS . $extraPath . $filename); // FIXME do sanitization of the filename
-
+#		echo $rootDir . DS . $extraPath . $filename;
 		// zip and password protect the malware files
 		if ($malware) {
 			// TODO check if CakePHP has no easy/safe wrapper to execute commands
 			$execRetval = '';
 			$execOutput = array();
+			echo "zip -j -P infected " . $zipfile->path . ' "' . addslashes($fileInZip->path) . '"', $execOutput, $execRetval;
 			exec("zip -j -P infected " . $zipfile->path . ' "' . addslashes($fileInZip->path) . '"', $execOutput, $execRetval);
 			if ($execRetval != 0) { // not EXIT_SUCCESS
 				// do some?

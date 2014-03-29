@@ -478,16 +478,62 @@ class EventsController extends AppController {
 				// Distribution, reporter for the events pushed will be the owner of the authentication key
 				$this->request->data['Event']['user_id'] = $this->Auth->user('id');
 			}
+			echo "123";
+			echo !empty($this->data);
+			
 			if (!empty($this->data)) {
 				$ext = '';
-				if (isset($this->data['Event']['submittedgfi'])) {
+#				if (isset($this->data['Event']['submittedgfi'])) {
+#					App::uses('File', 'Utility');
+#					$file = new File($this->data['Event']['submittedgfi']['name']);
+#					$ext = $file->ext();
+#				}
+#				if (isset($this->data['Event']['submittedgfi']) && ($ext != 'zip') && $this->data['Event']['submittedgfi']['size'] > 0 &&
+#						is_uploaded_file($this->data['Event']['submittedgfi']['tmp_name'])) {
+#					$this->Session->setFlash(__('You may only upload GFI Sandbox zip files.'));
+#				} else {
+#					if ($this->_add($this->request->data, $this->_isRest(),'')) {
+#						if ($this->_isRest()) {
+#							// REST users want to see the newly created event
+#							$this->view($this->Event->getId());
+#							$this->render('view');
+#						} else {
+#							// TODO now save uploaded attributes using $this->Event->getId() ..
+#							if (isset($this->data['Event']['submittedgfi'])) $this->_addGfiZip($this->Event->getId());
+#
+#							// redirect to the view of the newly created event
+#							if (!CakeSession::read('Message.flash')) {
+#								$this->Session->setFlash(__('The event has been saved'));
+#							} else {
+#								$existingFlash = CakeSession::read('Message.flash');
+#								$this->Session->setFlash(__('The event has been saved. ' . $existingFlash['message']));
+#							}
+#							$this->redirect(array('action' => 'view', $this->Event->getId()));
+#						}
+#					} else {
+#						if ($this->_isRest()) { // TODO return error if REST
+#							// REST users want to see the failed event
+#							$this->view($this->Event->getId());
+#							$this->render('view');
+#						} else {
+#							$this->Session->setFlash(__('The event could not be saved. Please, try again.'), 'default', array(), 'error');
+#							// TODO return error if REST
+#						}
+#					}
+#				}
+				
+				echo "+++++++++++++";
+				echo $this->data['Event']['submittedcuckoo'];
+				echo "#############";
+
+				if (isset($this->data['Event']['submittedcuckoo'])) {
 					App::uses('File', 'Utility');
-					$file = new File($this->data['Event']['submittedgfi']['name']);
+					$file = new File($this->data['Event']['submittedcuckoo']['name']);
 					$ext = $file->ext();
 				}
-				if (isset($this->data['Event']['submittedgfi']) && ($ext != 'zip') && $this->data['Event']['submittedgfi']['size'] > 0 &&
-						is_uploaded_file($this->data['Event']['submittedgfi']['tmp_name'])) {
-					$this->Session->setFlash(__('You may only upload GFI Sandbox zip files.'));
+				if (isset($this->data['Event']['submittedcuckoo']) && ($ext != 'zip') && $this->data['Event']['submittedcuckoo']['size'] > 0 &&
+						is_uploaded_file($this->data['Event']['submittedcuckoo']['tmp_name'])) {
+					$this->Session->setFlash(__('You may only upload Cuckoo Sandbox zip files.'));
 				} else {
 					if ($this->_add($this->request->data, $this->_isRest(),'')) {
 						if ($this->_isRest()) {
@@ -496,7 +542,7 @@ class EventsController extends AppController {
 							$this->render('view');
 						} else {
 							// TODO now save uploaded attributes using $this->Event->getId() ..
-							if (isset($this->data['Event']['submittedgfi'])) $this->_addGfiZip($this->Event->getId());
+							if (isset($this->data['Event']['submittedcuckoo'])) $this->_addCuckooZip($this->Event->getId());
 
 							// redirect to the view of the newly created event
 							if (!CakeSession::read('Message.flash')) {
@@ -1879,6 +1925,55 @@ class EventsController extends AppController {
 	//	$gv->image();
 	//}
 
+
+
+    public function _addCuckooZip($id) {
+            if (!empty($this->data) && $this->data['Event']['submittedcuckoo']['size'] > 0 &&
+                            is_uploaded_file($this->data['Event']['submittedcuckoo']['tmp_name'])) {
+                    $zipData = fread(fopen($this->data['Event']['submittedcuckoo']['tmp_name'], "r"),
+                                    $this->data['Event']['submittedcuckoo']['size']);
+
+                    // write
+                    $rootDir = APP . "files" . DS . $id . DS;
+                    echo "########################";
+                    echo $rootDir;
+                    App::uses('Folder', 'Utility');
+                    $dir = new Folder($rootDir, true);
+                    $destpath = $rootDir;
+                    $file = new File ($destpath);
+                    if (!preg_match('@^[\w-,\s,\.]+\.[A-Za-z0-9_]{2,4}$@', $this->data['Event']['submittedcuckoo']['name'])) throw new Exception ('Filename not allowed');
+                    if (PHP_OS == 'WINNT') {
+                            $zipfile = new File ($destpath . DS . $this->data['Event']['submittedcuckoo']['name']);
+                    } else {
+                            $zipfile = new File ($destpath . $this->data['Event']['submittedcuckoo']['name']);
+                    }
+
+                    $result = $zipfile->write($zipData);
+                    if (!$result) $this->Session->setFlash(__('Problem with writing the zip file. Please report to administrator.'));
+                    // extract zip..
+                    $execRetval = '';
+                    $execOutput = array();
+                    exec("unzip " . $zipfile->path . ' -d ' . $rootDir, $execOutput, $execRetval);
+                    if ($execRetval != 0) { // not EXIT_SUCCESS
+                            // do some?
+                            throw new Exception('An error has occured while attempting to unzip the GFI sandbox .zip file. We apologise for the inconvenience.');
+                    }
+
+                    // now open the xml..
+                    if (PHP_OS == 'WINNT') {
+                            $json = $rootDir . 'Analysis' . DS . 'reports' . DS . 'report.json';
+                    } else {
+                            $json = $rootDir . DS . 'Analysis' . DS . 'reports' . DS . 'report.json';
+                    }
+
+                    $fileData = fread(fopen($json, "r"), filesize($json));#$this->data['Event']['submittedgfi']['size']);
+
+                    // read JSON
+                    $this->_readCuckooJSON($fileData, $id);
+            }
+    }
+
+
 	public function _addGfiZip($id) {
 		if (!empty($this->data) && $this->data['Event']['submittedgfi']['size'] > 0 &&
 				is_uploaded_file($this->data['Event']['submittedgfi']['tmp_name'])) {
@@ -1915,7 +2010,16 @@ class EventsController extends AppController {
 			} else {
 				$xml = $rootDir . DS . 'Analysis' . DS . 'analysis.xml';
 			}
-			$fileData = fread(fopen($xml, "r"), $this->data['Event']['submittedgfi']['size']);
+
+                        echo "#####################";
+                        echo $xml;
+                        echo "#####################";
+                        echo $this->data['Event']['submittedgfi']['size'];
+                        echo "#####################";
+			echo filesize($xml);
+			echo "#####################";
+
+			$fileData = fread(fopen($xml, "r"), filesize($xml));#$this->data['Event']['submittedgfi']['size']);
 
 			// read XML
 			$this->_readGfiXML($fileData, $id);
@@ -1993,6 +2097,181 @@ class EventsController extends AppController {
 		}
 	}
 
+    public function _readCuckooJSON($data, $id) {
+            $this->loadModel('Attribute');
+            $this->Event->recursive = -1;
+            $this->Event->read(array('id', 'uuid', 'distribution'), $id);
+
+            $parsedJSON = json_decode($data, true);
+
+            if (Configure::read('MISP.default_attribute_distribution') != null) {
+                    if (Configure::read('MISP.default_attribute_distribution') === 'event') {
+                            $dist = $this->Event->data['Event']['distribution'];
+                    } else {
+                            $dist = '';
+                            $dist .= Configure::read('MISP.default_attribute_distribution');
+                    }
+            }
+            
+            $filenames = array();
+          	
+            $analysis_target 	 = '';
+            $analysis_target_md5 = '';
+            $target = $parsedJSON{'target'}{'file'};
+			foreach ($target as $key => $value) {
+				if ($key =='name') $analysis_target 	= (string)$value;
+			   	if ($key == 'md5') $analysis_target_md5 = (string)$value;
+			}   
+			$filenames[] = $analysis_target;
+			$rootDir = APP . "files" . DS . $id . DS;
+			$malware = $rootDir . DS . 'Analysis' . DS . 'binary';
+			$this->Event->Attribute->uploadAttachment($malware, $analysis_target,  true, $id, null, 'Analysis' . DS , $this->Event->data['Event']['uuid'] . '-binary', $dist, "target");
+		
+			$files = array();
+            $results = $parsedJSON{'dropped'};
+            foreach ($results as $result) {
+                    $arrayItemKey = '';
+                    $arrayItemValue = '';
+                    $arrayItemPath = '';
+                    
+                    foreach ($result as $key => $val) {
+                            if ($key == 'name') 	$arrayItemKey = (string)$val;
+                            if ($key == 'md5') 		$arrayItemValue = (string)$val;
+                   #         if ($key == 'sha1') 	$arrayItemValue = (string)$val;
+                   #         if ($key == 'sha256') 	$arrayItemValue = (string)$val;
+                   #         if ($key == 'sha512') 	$arrayItemValue = (string)$val;
+                   #         if ($key == 'ssdeep') 	$arrayItemValue = (string)$val;
+                   #         if ($key == 'crc32') 	$arrayItemValue = (string)$val;
+                            if ($key == 'size') 	$arrayItemSize = $val;
+                            if ($key == 'path') 	$arrayItemPath = (string)$val;
+                    }
+             #       print_r($result);
+                    //$files[$arrayItemKey] = $arrayItemValue;
+                    if (($arrayItemSize > 0) && ($arrayItemKey != $analysis_target)) {
+                            $files[] = array('key' => $arrayItemKey, 'md5' => $arrayItemValue, 'path' => $arrayItemPath);
+                    }
+            }
+
+            //$files = array_unique($files);
+            // write content..
+            $rootDir = APP . "files" . DS . $id . DS;
+            foreach ($files as $file) {
+                    $keyName = $file['key'];                                        
+                    
+                    preg_match('/.*\/files\/(.*)\/'.$file['key'].'/', $file['path'], $res, PREG_OFFSET_CAPTURE);
+                    $extraPath = 'Analysis' . DS . 'files' . DS . $res[1][0] . DS;
+
+                    $ffile = new File($file['path']);
+                    if ($ffile->exists()) { // TODO put in array for test later
+                            $this->Event->Attribute->uploadAttachment($file['path'], $file['md5'], true, $id, null, $extraPath, $keyName, $dist); // TODO was false
+                            $filenames[] = $keyName;
+                    }
+            }
+            
+           // Persistence mechanism -- filename
+            $files = array();
+        	$results = $parsedJSON{'behavior'}{'summary'}{'files'};
+            foreach ($results as $result) {
+            	$fname = substr($result, (strrpos($result, '\\') + 1));
+            	echo $fname;
+            	if (!in_array($fname, $filenames)) {
+               		$files[$fname] = "not parsed"; 
+               	}
+            }
+            //$regs = array_unique($regs);
+
+            // write content..
+            foreach ($files as $key => $val) {
+                    // add attribute..
+                    $this->Attribute->create();
+                            $this->Attribute->save(array(
+                                    'event_id' => $id,
+                                    'category' => 'Payload delivery', // 'Persistence mechanism'
+                                    'type' => 'other',
+                                    'value' => $key,
+                                    'distribution' => $dist,
+                                    'to_ids' => false
+                            ));
+            }
+            
+			//Network activity -- .pcap
+			$realFileName = 'dump.pcap';
+			$rootDir = APP . 'files' . DS . $id . DS;
+			$malware = $rootDir . DS . 'Analysis' . DS . 'dump.pcap';
+			$this->Event->Attribute->uploadAttachment($malware, $realFileName,  false, $id, 'Network activity', 'Analysis' . DS , $this->Event->data['Event']['uuid'] . '-dump.pcap', $dist);
+			                    
+                    
+            //Network activity -- ip-dst
+            $ips = array();
+            $hostnames = array();
+			$protocols = array("irc", "http", "smtp", "tcp", "hosts", "dns", "domains", "icmp");
+            
+            $networks = $parsedJSON{'network'};
+            foreach ($networks as $protocol => $connections) {
+	            if (in_array($protocol, $protocols)) {
+	               	foreach ($connections as $connection) {
+	            		foreach ($connection as $key => $value) {
+	            			echo $key;
+	            			echo $value;
+	                    	if ($key =='dst') $ips[] = (string)$value;
+	                       	if ($key == 'host') $hostnames[] = (string)$value;
+	                	}   
+	                } 
+	            }
+	        }
+            // write content..
+
+            // ip-s
+            foreach ($ips as $ip) {
+                    // add attribute..
+                    $this->Attribute->create();
+                    $this->Attribute->save(array(
+                                    'event_id' => $id,
+                                    'category' => 'Network activity',
+                                    'type' => 'ip-dst',
+                                    'value' => $ip,
+                                    'distribution' => $dist,
+                                    'to_ids' => false));
+            }
+            foreach ($hostnames as $hostname) {
+                    // add attribute..
+                    $this->Attribute->create();
+                    $this->Attribute->save(array(
+                                    'event_id' => $id,
+                                    'category' => 'Network activity',
+                                    'type' => 'hostname',
+                                    'value' => $hostname,
+                                    'distribution' => $dist,
+                                    'to_ids' => false));
+            }
+            // Persistence mechanism -- regkey|value
+            $regs = array();
+            $results = $parsedJSON{'behavior'}{'summary'}{'keys'}; #xpath('/analysis/processes/process/registry_section/set_value');
+            foreach ($results as $result) {
+               	$regs[$result] = "not parsed"; #str_replace('(UNICODE_0x00000000)', '', $arrayItemValue);
+            }
+            //$regs = array_unique($regs);
+
+            // write content..
+            foreach ($regs as $key => $val) {
+                    // add attribute..
+                    $this->Attribute->create();
+ #                   if ($this->strposarray($val,$actualFileNameArray)) {
+                            $this->Attribute->save(array(
+                                    'event_id' => $id,
+                                    'category' => 'Persistence mechanism', // 'Persistence mechanism'
+                                    'type' => 'regkey',
+                                    'value' => $key,
+                                    'distribution' => $dist,
+                                    'to_ids' => false
+                            ));
+  #                  }
+            }
+    }
+
+
+
+
 	public function _readGfiXML($data, $id) {
 		$this->loadModel('Attribute');
 		$this->Event->recursive = -1;
@@ -2000,6 +2279,7 @@ class EventsController extends AppController {
 		// import XML class
 		App::uses('Xml', 'Utility');
 		// now parse it
+		echo $data;
 		$parsedXml = Xml::build($data, array('return' => 'simplexml'));
 		// xpath..
 
